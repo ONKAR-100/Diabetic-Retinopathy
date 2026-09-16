@@ -97,7 +97,7 @@ def migrate_data():
 
     # --- 3. Migrate Screenings ---
     logger.info("Migrating Screenings & Images...")
-    local_screenings = local_db.query(Screening).order_by(Screening.created_at).all()
+    local_screenings = local_db.query(Screening).all()
     for ls in local_screenings:
         if supa_db.query(Screening).filter_by(id=ls.id).first():
             continue # Skip if already migrated

@@ -1,0 +1,21 @@
+services:
+  - type: web
+    name: retinaai-backend
+    env: python
+    region: oregon
+    plan: starter # PyTorch needs at least the 512MB/1GB tier; Standard is recommended.
+    buildCommand: "cd Backend/retinaai-backend && pip install -r requirements.txt"
+    startCommand: "cd Backend/retinaai-backend && uvicorn main:app --host 0.0.0.0 --port $PORT"
+    envVars:
+      - key: DATABASE_URL
+        sync: false
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_ANON_KEY
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      - key: JWT_SECRET_KEY
+        generateValue: true
+      - key: PYTHON_VERSION
+        value: 3.11.0
