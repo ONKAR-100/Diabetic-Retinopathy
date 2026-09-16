@@ -54,13 +54,10 @@ export const PIPELINE_STAGES: StageInfo[] = [
   },
   {
     id: 'report',
-    name: 'Report Generation',
-    shortName: 'Report',
     name: 'AI Diagnostic Explainability Report Generation',
     shortName: 'Explainability Report',
     model: 'Diagnostic Synthesis Engine',
     description: 'Compiling findings, calibrated confidence & referral advice',
-    runningText: 'Synthesizing diagnostic report and compiling findings…',
     runningText: 'Synthesizing AI diagnostic explainability report & findings…',
   },
 ];
