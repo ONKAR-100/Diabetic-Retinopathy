@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 # RetinaAI: Clinical-Grade Diabetic Retinopathy Screening & Longitudinal Retinal Progression Platform
 
 > **Smart India Hackathon (SIH 26038)**  
@@ -691,4 +690,3 @@ Distributed under the **MIT License**. See `LICENSE` for more information.
 =======
 # Diabetic-Retinopathy
 AI-powered diabetic retinopathy screening and telemedicine platform with retinal image quality assessment, DR grading, explainable AI, retinal analysis, and longitudinal patient monitoring.
->>>>>>> d549349eae15634df9fe95ffb5e44ac9ebf6ae89
