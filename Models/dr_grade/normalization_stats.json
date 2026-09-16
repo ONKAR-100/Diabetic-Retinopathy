@@ -1,0 +1,30 @@
+{
+    "mean": [
+        0.447316822981802,
+        0.45017611503134863,
+        0.4507293602492911
+    ],
+    "std": [
+        0.19789996994003903,
+        0.20471930855122064,
+        0.20049962430652946
+    ],
+    "calculated_from": "train_only",
+    "num_train_images": 2562,
+    "model_input_size": 300,
+    "working_size": 512,
+    "preprocessing": [
+        "ROI crop",
+        "resize to working resolution",
+        "Graham-style illumination correction",
+        "LAB CLAHE",
+        "resize to model input"
+    ],
+    "clahe_clip_limit": 2.0,
+    "clahe_tile_grid": [
+        8,
+        8
+    ],
+    "graham_sigma_ratio": 0.3,
+    "seed": 42
+}

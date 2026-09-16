@@ -1,0 +1,70 @@
+{
+  "model_file": "best_fundus_localization_model.pth",
+  "task": "Optic Disc and Fovea anatomical localization",
+  "input": {
+    "channels": 3,
+    "color_order": "RGB",
+    "resize": [
+      512,
+      512
+    ],
+    "normalization": {
+      "mean": [
+        0.485,
+        0.456,
+        0.406
+      ],
+      "std": [
+        0.229,
+        0.224,
+        0.225
+      ]
+    }
+  },
+  "architecture": {
+    "name": "ResUNet",
+    "encoder": "resnet18",
+    "encoder_weights_during_training": "ImageNet",
+    "encoder_depth": 4,
+    "decoder_channels": [
+      128,
+      64,
+      32,
+      16
+    ],
+    "decoder_use_batchnorm": true,
+    "decoder_attention_type": null,
+    "dropout_p": 0.2,
+    "output_channels": 2,
+    "output_channel_0": "optic_disc_heatmap",
+    "output_channel_1": "fovea_heatmap"
+  },
+  "checkpoint": {
+    "format": "PyTorch checkpoint dictionary",
+    "contains_model_state_dict": true,
+    "training_epoch_stored": 5,
+    "best_validation_loss_stored": 3.1362602710723877,
+    "training_config": {
+      "IMG_SIZE": 512,
+      "GAUSSIAN_SIGMA": 8,
+      "ALPHA": 1.0,
+      "BETA": 1.0,
+      "SEED": 42
+    }
+  },
+  "inference": {
+    "default_decode_method": "argmax",
+    "supported_decode_methods": [
+      "argmax",
+      "soft_argmax"
+    ],
+    "coordinate_space": "original input image pixels",
+    "confidence": "maximum sigmoid heatmap value",
+    "overlay": {
+      "optic_disc_color": "green",
+      "fovea_color": "brown",
+      "threshold": 0.3,
+      "alpha": 0.4
+    }
+  }
+}
