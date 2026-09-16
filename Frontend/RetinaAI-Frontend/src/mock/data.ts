@@ -1,0 +1,16 @@
+import { Patient, ScreeningResult } from '../types';
+export const patients:any[]=[
+ {patientId:'RTA-2401',name:'Meena Patil',age:58,sex:'Female',diabetesDuration:11,previousDR:'Mild',previousScreening:'2025-08-11'},
+ {patientId:'RTA-2402',name:'Ramesh Jadhav',age:64,sex:'Male',diabetesDuration:16,previousDR:'Moderate',previousScreening:'2026-02-18'},
+ {patientId:'RTA-2403',name:'Savitri More',age:52,sex:'Female',diabetesDuration:7,previousDR:'None',previousScreening:'2025-11-03'},
+ {patientId:'RTA-2404',name:'Ganesh Shinde',age:61,sex:'Male',diabetesDuration:14,previousDR:'Severe',previousScreening:'2026-05-21'}
+];
+const q=(o=0):any=>({focus:82+o,brightness:91,contrast:76+o,fov:88,overall:87+o,status:'acceptable',issues:o<0?['Low focus']:[],guidance:o<0?'Move the camera slightly closer and stabilize the device.':'Image is suitable for analysis.'});
+export const screenings:any[]=[
+ {screeningId:'SCR-10291',patientId:'RTA-2401',date:'2026-09-03',left:{grade:2,model_confidence:.91,image_reliability:.87,quality:q()},right:{grade:1,model_confidence:.88,image_reliability:.89,quality:q(1)},referable:true,recommendation:'specialist_evaluation',evidence:{lesionEvidence:'moderate',vessel_evidence:true,optic_disc_detected:true,lesion_categories:[{name:'Microaneurysm',status:'Detected'},{name:'Hemorrhage',status:'Review Required'},{name:'Exudate',status:'Not detected'},{name:'Neovascularization',status:'Not detected'}]},reviewStatus:'Pending Review'},
+ {screeningId:'SCR-10290',patientId:'RTA-2402',date:'2026-09-03',left:{grade:0,model_confidence:.95,image_reliability:.92,quality:q(3)},right:{grade:0,model_confidence:.94,image_reliability:.92,quality:q(2)},referable:false,recommendation:'routine_followup',evidence:{lesionEvidence:'low',vessel_evidence:true,optic_disc_detected:true,lesion_categories:[{name:'Microaneurysm',status:'Not detected'},{name:'Hemorrhage',status:'Not detected'},{name:'Exudate',status:'Not detected'},{name:'Neovascularization',status:'Not detected'}]},reviewStatus:'Reviewed',reviewer:'Dr. A. Kulkarni'},
+ {screeningId:'SCR-10289',patientId:'RTA-2403',date:'2026-09-02',left:{grade:1,model_confidence:.86,image_reliability:.90,quality:q(1)},right:{grade:1,model_confidence:.84,image_reliability:.89,quality:q(0)},referable:false,recommendation:'routine_followup',evidence:{lesionEvidence:'moderate',vessel_evidence:true,optic_disc_detected:true,lesion_categories:[{name:'Microaneurysm',status:'Detected'},{name:'Hemorrhage',status:'Not detected'},{name:'Exudate',status:'Not detected'},{name:'Neovascularization',status:'Not detected'}]},reviewStatus:'Reviewed',reviewer:'Dr. A. Kulkarni'},
+ {screeningId:'SCR-10288',patientId:'RTA-2404',date:'2026-09-01',left:{grade:3,model_confidence:.89,image_reliability:.86,quality:q(-2)},right:{grade:2,model_confidence:.87,image_reliability:.84,quality:q()},referable:true,recommendation:'specialist_evaluation',evidence:{lesionEvidence:'high',vessel_evidence:true,optic_disc_detected:true,lesion_categories:[{name:'Microaneurysm',status:'Detected'},{name:'Hemorrhage',status:'Detected'},{name:'Exudate',status:'Detected'},{name:'Neovascularization',status:'Review Required'}]},reviewStatus:'Pending Review'}
+];
+export const retina='/retina.svg';
+
