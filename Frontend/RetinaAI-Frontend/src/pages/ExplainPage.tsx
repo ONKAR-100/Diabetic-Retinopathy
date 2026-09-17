@@ -5,6 +5,7 @@ import { GradCAMViewer } from '../components/GradCAMViewer';
 import { VesselOverlay } from '../components/VesselOverlay';
 import { ODFoveaMarker } from '../components/ODFoveaMarker';
 import { LesionPanel } from '../components/LesionPanel';
+import { RetinalBiomarkersPanel } from '../components/RetinalBiomarkersPanel';
 import { useScreening } from '../contexts/ScreeningContext';
 import { BACKEND_URL } from '../services/api';
 
@@ -91,6 +92,23 @@ export default function ExplainPage() {
           <h3>Lesion Segmentation Module</h3>
           <LesionPanel lesion={eyeData?.lesion || null} />
         </Card>
+      </div>
+
+      <div style={{ marginTop: 24 }}>
+        <RetinalBiomarkersPanel
+          biomarkers={eyeData?.biomarkers}
+          eyeLabel={activeEye === 'left' ? 'OS · Left Eye' : 'OD · Right Eye'}
+          odCoords={{
+            x: eyeData?.od_x ?? null,
+            y: eyeData?.od_y ?? null,
+            confidence: eyeData?.od_confidence ?? null
+          }}
+          foveaCoords={{
+            x: eyeData?.fovea_x ?? null,
+            y: eyeData?.fovea_y ?? null,
+            confidence: eyeData?.fovea_confidence ?? null
+          }}
+        />
       </div>
 
       <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 24 }}>

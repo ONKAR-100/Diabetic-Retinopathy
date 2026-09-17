@@ -568,6 +568,145 @@ def lesion_analysis_block(screening, eye: str, lesion_data, styles, full_w: floa
         return single_t
 
 
+def biomarkers_table_block(screening, styles, full_w: float):
+    """
+    Construct a compact conditional table for retinal vascular biomarkers.
+    Returns None if neither eye has computed biomarker data.
+    """
+    def _extract_bio(eye_prefix):
+        raw = getattr(screening, f"{eye_prefix}_biomarkers", None)
+        if isinstance(raw, str):
+            try:
+                raw = json.loads(raw)
+            except Exception:
+                raw = None
+        if not raw or not isinstance(raw, dict):
+            avr = getattr(screening, f"{eye_prefix}_avr", None)
+            tort = getattr(screening, f"{eye_prefix}_tortuosity", None)
+            df = getattr(screening, f"{eye_prefix}_fractal_dim", None)
+            if avr is not None or df is not None:
+                return {
+                    "avr": avr,
+                    "mean_tortuosity_distance": tort,
+                    "fractal_dimension": df,
+                    "status": "completed"
+                }
+            return None
+        if raw.get("status") == "skipped":
+            return None
+        return raw
+
+    left_b = _extract_bio("left")
+    right_b = _extract_bio("right")
+
+    has_any = False
+    for b in (left_b, right_b):
+        if b and (b.get("avr") is not None or b.get("fractal_dimension") is not None or b.get("mean_tortuosity_distance") is not None):
+            has_any = True
+            break
+
+    if not has_any:
+        return None
+
+    def _val(b, key, fmt="{:.4f}"):
+        if not b:
+            return "—"
+        v = b.get(key)
+        if v is None:
+            return "—"
+        try:
+            return fmt.format(float(v))
+        except (ValueError, TypeError):
+            return str(v)
+
+    def _calibers(b):
+        if not b:
+            return "—"
+        crae = b.get("crae_pixels")
+        crve = b.get("crve_pixels")
+        if crae is not None and crve is not None:
+            return f"{float(crae):.1f} / {float(crve):.1f} px"
+        return "—"
+
+    def _fractal(b):
+        if not b:
+            return "—"
+        df = b.get("fractal_dimension")
+        r2 = b.get("fractal_r_squared")
+        if df is not None:
+            res = f"{float(df):.4f}"
+            if r2 is not None:
+                res += f" (R²={float(r2):.3f})"
+            return res
+        return "—"
+
+    def _topology(b):
+        if not b:
+            return "—"
+        zb = b.get("zone_b_count")
+        br = b.get("branch_count")
+        if zb is not None or br is not None:
+            parts = []
+            if zb is not None:
+                parts.append(f"{zb} zb")
+            if br is not None:
+                parts.append(f"{br} br")
+            return ", ".join(parts)
+        return "—"
+
+    rows = [
+        [
+            Paragraph("<b>Morphometric Parameter</b>", styles['RBody']),
+            Paragraph("<b>Left Eye (OS)</b>", styles['RBody']),
+            Paragraph("<b>Right Eye (OD)</b>", styles['RBody']),
+            Paragraph("<b>Method / Reference</b>", styles['RBody']),
+        ],
+        [
+            Paragraph("<b>Arteriolar-to-Venular Ratio (AVR)</b>", styles['RBody']),
+            Paragraph(_val(left_b, "avr", "{:.4f}"), styles['RBody']),
+            Paragraph(_val(right_b, "avr", "{:.4f}"), styles['RBody']),
+            Paragraph("Parr-Hubbard-Knudtson (Zone B Heuristic)", styles['RMuted']),
+        ],
+        [
+            Paragraph("<b>CRAE / CRVE Calibers</b>", styles['RBody']),
+            Paragraph(_calibers(left_b), styles['RBody']),
+            Paragraph(_calibers(right_b), styles['RBody']),
+            Paragraph("Central Retinal Equivalents (px)", styles['RMuted']),
+        ],
+        [
+            Paragraph("<b>Mean Distance Tortuosity (τ<sub>d</sub>)</b>", styles['RBody']),
+            Paragraph(_val(left_b, "mean_tortuosity_distance", "{:.4f}"), styles['RBody']),
+            Paragraph(_val(right_b, "mean_tortuosity_distance", "{:.4f}"), styles['RBody']),
+            Paragraph("Arc / Chord - 1 (Skeleton branches)", styles['RMuted']),
+        ],
+        [
+            Paragraph("<b>Curvature Tortuosity (τ<sub>c</sub>)</b>", styles['RBody']),
+            Paragraph(_val(left_b, "mean_tortuosity_curvature", "{:.4f}"), styles['RBody']),
+            Paragraph(_val(right_b, "mean_tortuosity_curvature", "{:.4f}"), styles['RBody']),
+            Paragraph("Mean angular deviation / arc length", styles['RMuted']),
+        ],
+        [
+            Paragraph("<b>Fractal Dimension (D<sub>f</sub>)</b>", styles['RBody']),
+            Paragraph(_fractal(left_b), styles['RBody']),
+            Paragraph(_fractal(right_b), styles['RBody']),
+            Paragraph("Box-Counting complexity & R² fit", styles['RMuted']),
+        ],
+        [
+            Paragraph("<b>Branching Topology</b>", styles['RBody']),
+            Paragraph(_topology(left_b), styles['RBody']),
+            Paragraph(_topology(right_b), styles['RBody']),
+            Paragraph("Zone-B vessels / Bifurcations", styles['RMuted']),
+        ],
+    ]
+
+    col1 = 48 * mm
+    col2 = 28 * mm
+    col3 = 28 * mm
+    col4 = full_w - (col1 + col2 + col3)
+    table = simple_table(rows, [col1, col2, col3, col4], header=True)
+    return table
+
+
 # ─── Main report generator ──────────────────────────────────────────────────
 class ReportService:
 
@@ -830,6 +969,21 @@ class ReportService:
             story.append(note_t)
 
         story.append(Spacer(1, 4*mm))
+
+        # ── RETINAL VASCULAR BIOMARKERS (CONDITIONAL) ────────────────────────
+        bio_table = biomarkers_table_block(screening, styles, full_w)
+        if bio_table:
+            story.append(section_header("Retinal Vascular Biomarkers — Research / Exploratory Morphometry", styles))
+            story.append(Spacer(1, 2*mm))
+            story.append(bio_table)
+            story.append(Spacer(1, 2*mm))
+            disclaimer_text = (
+                "* Retinal microvascular biomarkers (AVR, tortuosity, fractal dimension) are computed algorithmically "
+                "via MATLAB Engine morphometry and heuristics. They are intended for investigative research and do "
+                "not constitute standalone clinically validated diagnostic measurements."
+            )
+            story.append(Paragraph(disclaimer_text, styles['RDisclaimer']))
+            story.append(Spacer(1, 4*mm))
 
         # ── REFERRAL RECOMMENDATION ──────────────────────────────────────────
         story.append(section_header("Referral Recommendation", styles))

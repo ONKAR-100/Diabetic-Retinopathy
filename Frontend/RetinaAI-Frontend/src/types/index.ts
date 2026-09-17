@@ -35,6 +35,23 @@ export interface QualityResult {
   scores: QualityScores;
 }
 
+export interface BiomarkersResult {
+  avr?: number | null;
+  crae_pixels?: number | null;
+  crve_pixels?: number | null;
+  mean_tortuosity_distance?: number | null;
+  mean_tortuosity_curvature?: number | null;
+  max_tortuosity?: number | null;
+  fractal_dimension?: number | null;
+  fractal_r_squared?: number | null;
+  vessel_density?: number | null;
+  zone_b_count?: number | null;
+  branch_count?: number | null;
+  runtime_seconds?: number | null;
+  status?: 'completed' | 'skipped' | 'failed' | string | null;
+  error_message?: string | null;
+}
+
 export interface EyeResult {
   quality: QualityResult;
   dr_grade: DRGrade;
@@ -56,6 +73,10 @@ export interface EyeResult {
   fovea_y: number | null;
   fovea_confidence: number | null;
   lesion: LesionResult | null;  // null = not available yet
+  biomarkers?: BiomarkersResult | null;
+  avr?: number | null;
+  vessel_tortuosity?: number | null;
+  fractal_dimension?: number | null;
 }
 
 export interface LesionCategory {

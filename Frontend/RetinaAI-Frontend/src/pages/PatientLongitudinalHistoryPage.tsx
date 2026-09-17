@@ -1175,15 +1175,55 @@ export default function PatientLongitudinalHistoryPage() {
                   const prevVessel = prevEye?.vessel_overlay_url || prevEye?.vessel_mask_url;
                   const currVessel = currEye?.vessel_overlay_url || currEye?.vessel_mask_url;
 
+                  // 1. Vessel Density
                   const prevDensity = prevEye?.vessel_density;
                   const currDensity = currEye?.vessel_density;
+                  const hasDensity = prevDensity !== null && prevDensity !== undefined && currDensity !== null && currDensity !== undefined;
+                  const deltaDensity = hasDensity ? (currDensity - prevDensity) : null;
+
+                  // 2. AVR
+                  const prevAvr = prevEye?.biomarkers?.avr ?? prevEye?.avr;
+                  const currAvr = currEye?.biomarkers?.avr ?? currEye?.avr;
+                  const hasAvr = prevAvr !== null && prevAvr !== undefined && currAvr !== null && currAvr !== undefined;
+                  const deltaAvr = hasAvr ? (currAvr - prevAvr) : null;
+
+                  // 3. Mean Distance Tortuosity
+                  const prevTort = prevEye?.biomarkers?.mean_tortuosity_distance ?? prevEye?.vessel_tortuosity;
+                  const currTort = currEye?.biomarkers?.mean_tortuosity_distance ?? currEye?.vessel_tortuosity;
+                  const hasTort = prevTort !== null && prevTort !== undefined && currTort !== null && currTort !== undefined;
+                  const deltaTort = hasTort ? (currTort - prevTort) : null;
+
+                  // 4. Fractal Dimension
+                  const prevDf = prevEye?.biomarkers?.fractal_dimension ?? prevEye?.fractal_dimension;
+                  const currDf = currEye?.biomarkers?.fractal_dimension ?? currEye?.fractal_dimension;
+                  const hasDf = prevDf !== null && prevDf !== undefined && currDf !== null && currDf !== undefined;
+                  const deltaDf = hasDf ? (currDf - prevDf) : null;
+
+                  const renderDelta = (deltaVal: number | null, isPercent = false, decimals = 4) => {
+                    if (deltaVal === null || deltaVal === undefined || isNaN(deltaVal)) {
+                      return <span style={{ color: '#8fa5a7' }}>—</span>;
+                    }
+                    const sign = deltaVal > 0 ? '+' : '';
+                    const formatted = isPercent
+                      ? `${sign}${(deltaVal * 100).toFixed(2)}%`
+                      : `${sign}${deltaVal.toFixed(decimals)}`;
+                    const isZero = Math.abs(deltaVal) < 0.00005;
+                    const arrow = isZero ? '→ ' : deltaVal > 0 ? '▲ ' : '▼ ';
+                    const color = isZero ? '#527072' : deltaVal > 0 ? '#b91c1c' : '#167650';
+                    return (
+                      <span style={{ fontFamily: 'var(--font-mono)', fontWeight: 700, color }}>
+                        {arrow}{formatted}
+                      </span>
+                    );
+                  };
 
                   return (
                     <div>
                       <div style={{ fontSize: 11, fontWeight: 800, color: '#0e6264', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 14 }}>
-                        Retinal Microvasculature Segmentation
+                        Retinal Microvasculature Segmentation &amp; Morphometric Biomarkers
                       </div>
 
+                      {/* Side-by-Side Vessel Visuals */}
                       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 16 }}>
                         <div>
                           <div style={{ fontSize: 11, color: '#688285', marginBottom: 6, fontWeight: 600 }}>Previous Vessel Mask / Overlay</div>
@@ -1212,21 +1252,91 @@ export default function PatientLongitudinalHistoryPage() {
                         </div>
                       </div>
 
-                      {/* Stored Quantitative Vessel Density */}
-                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-                        <div style={{ background: '#ffffff', padding: 14, borderRadius: 8, border: '1px solid #edf2f1' }}>
-                          <span style={{ fontSize: 11, color: '#779193' }}>Vessel Density (Previous)</span>
-                          <div style={{ fontFamily: 'var(--font-mono)', fontSize: 16, fontWeight: 700, color: '#132b2e', marginTop: 2 }}>
-                            {prevDensity !== undefined && prevDensity !== null ? (typeof prevDensity === 'number' ? prevDensity.toFixed(3) : prevDensity) : '—'}
-                          </div>
-                        </div>
+                      {/* Quantitative Vascular Morphometry Comparison Table */}
+                      <div style={{ background: '#ffffff', borderRadius: 10, border: '1px solid #edf2f1', overflow: 'hidden' }}>
+                        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+                          <thead>
+                            <tr style={{ background: '#f8faf9', borderBottom: '1px solid #edf2f1', color: '#688688', textAlign: 'left', fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                              <th style={{ padding: '10px 14px', fontWeight: 700 }}>Morphometric Biomarker</th>
+                              <th style={{ padding: '10px 14px', fontWeight: 700 }}>Previous Exam</th>
+                              <th style={{ padding: '10px 14px', fontWeight: 700 }}>Current Exam</th>
+                              <th style={{ padding: '10px 14px', fontWeight: 700 }}>Longitudinal Shift (Δ)</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {/* Row 1: Vessel Density */}
+                            <tr style={{ borderBottom: '1px solid #edf2f1' }}>
+                              <td style={{ padding: '10px 14px' }}>
+                                <div style={{ fontWeight: 700, color: '#142e31' }}>Vessel Density</div>
+                                <div style={{ fontSize: 10.5, color: '#7a9698' }}>Segmented vascular area fraction</div>
+                              </td>
+                              <td style={{ padding: '10px 14px', fontFamily: 'var(--font-mono)', fontWeight: 600, color: '#132b2e' }}>
+                                {prevDensity !== null && prevDensity !== undefined ? `${(prevDensity * 100).toFixed(1)}%` : '—'}
+                              </td>
+                              <td style={{ padding: '10px 14px', fontFamily: 'var(--font-mono)', fontWeight: 600, color: '#132b2e' }}>
+                                {currDensity !== null && currDensity !== undefined ? `${(currDensity * 100).toFixed(1)}%` : '—'}
+                              </td>
+                              <td style={{ padding: '10px 14px' }}>
+                                {renderDelta(deltaDensity, true)}
+                              </td>
+                            </tr>
 
-                        <div style={{ background: '#ffffff', padding: 14, borderRadius: 8, border: '1px solid #edf2f1' }}>
-                          <span style={{ fontSize: 11, color: '#779193' }}>Vessel Density (Current)</span>
-                          <div style={{ fontFamily: 'var(--font-mono)', fontSize: 16, fontWeight: 700, color: '#132b2e', marginTop: 2 }}>
-                            {currDensity !== undefined && currDensity !== null ? (typeof currDensity === 'number' ? currDensity.toFixed(3) : currDensity) : '—'}
-                          </div>
-                        </div>
+                            {/* Row 2: AVR */}
+                            <tr style={{ borderBottom: '1px solid #edf2f1' }}>
+                              <td style={{ padding: '10px 14px' }}>
+                                <div style={{ fontWeight: 700, color: '#142e31' }}>Arteriolar-to-Venular Ratio (AVR)</div>
+                                <div style={{ fontSize: 10.5, color: '#7a9698' }}>Heuristic caliber ratio across Zone B</div>
+                              </td>
+                              <td style={{ padding: '10px 14px', fontFamily: 'var(--font-mono)', fontWeight: 600, color: '#132b2e' }}>
+                                {prevAvr !== null && prevAvr !== undefined ? prevAvr.toFixed(4) : '—'}
+                              </td>
+                              <td style={{ padding: '10px 14px', fontFamily: 'var(--font-mono)', fontWeight: 600, color: '#132b2e' }}>
+                                {currAvr !== null && currAvr !== undefined ? currAvr.toFixed(4) : '—'}
+                              </td>
+                              <td style={{ padding: '10px 14px' }}>
+                                {renderDelta(deltaAvr, false, 4)}
+                              </td>
+                            </tr>
+
+                            {/* Row 3: Mean Distance Tortuosity */}
+                            <tr style={{ borderBottom: '1px solid #edf2f1' }}>
+                              <td style={{ padding: '10px 14px' }}>
+                                <div style={{ fontWeight: 700, color: '#142e31' }}>Mean Distance Tortuosity (τ<sub>d</sub>)</div>
+                                <div style={{ fontSize: 10.5, color: '#7a9698' }}>Arc-to-chord length ratio minus 1</div>
+                              </td>
+                              <td style={{ padding: '10px 14px', fontFamily: 'var(--font-mono)', fontWeight: 600, color: '#132b2e' }}>
+                                {prevTort !== null && prevTort !== undefined ? prevTort.toFixed(4) : '—'}
+                              </td>
+                              <td style={{ padding: '10px 14px', fontFamily: 'var(--font-mono)', fontWeight: 600, color: '#132b2e' }}>
+                                {currTort !== null && currTort !== undefined ? currTort.toFixed(4) : '—'}
+                              </td>
+                              <td style={{ padding: '10px 14px' }}>
+                                {renderDelta(deltaTort, false, 4)}
+                              </td>
+                            </tr>
+
+                            {/* Row 4: Fractal Dimension */}
+                            <tr>
+                              <td style={{ padding: '10px 14px' }}>
+                                <div style={{ fontWeight: 700, color: '#142e31' }}>Fractal Dimension (D<sub>f</sub>)</div>
+                                <div style={{ fontSize: 10.5, color: '#7a9698' }}>Box-counting vascular complexity</div>
+                              </td>
+                              <td style={{ padding: '10px 14px', fontFamily: 'var(--font-mono)', fontWeight: 600, color: '#132b2e' }}>
+                                {prevDf !== null && prevDf !== undefined ? prevDf.toFixed(4) : '—'}
+                              </td>
+                              <td style={{ padding: '10px 14px', fontFamily: 'var(--font-mono)', fontWeight: 600, color: '#132b2e' }}>
+                                {currDf !== null && currDf !== undefined ? currDf.toFixed(4) : '—'}
+                              </td>
+                              <td style={{ padding: '10px 14px' }}>
+                                {renderDelta(deltaDf, false, 4)}
+                              </td>
+                            </tr>
+                          </tbody>
+                        </table>
+                      </div>
+
+                      <div style={{ fontSize: 11, color: '#7a9698', marginTop: 8, fontStyle: 'italic', lineHeight: 1.35 }}>
+                        * Retinal microvascular biomarkers (AVR, tortuosity, fractal dimension) are computational research metrics. Changes reflect algorithmic morphometry across image pairs and do not constitute standalone clinical determinations.
                       </div>
                     </div>
                   );

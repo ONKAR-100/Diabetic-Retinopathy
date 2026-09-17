@@ -8,6 +8,7 @@ import {
   RefreshCw, FileCheck2, CheckCircle
 } from 'lucide-react';
 import { Badge, Button, GradeBadge } from '../components';
+import { RetinalBiomarkersPanel } from '../components/RetinalBiomarkersPanel';
 import { getScreening } from '../services/screenings';
 import { submitReview } from '../services/review';
 import { useScreening } from '../contexts/ScreeningContext';
@@ -68,6 +69,9 @@ export default function ScreeningDetailPage() {
 
   // Active eye for dedicated lesion inspection section
   const [activeLesionEye, setActiveLesionEye] = useState<'left' | 'right'>('left');
+
+  // Active eye for dedicated retinal biomarkers section
+  const [activeBiomarkerEye, setActiveBiomarkerEye] = useState<'left' | 'right'>('left');
 
   const showToast = (msg: string) => {
     setToastMessage(msg);
@@ -1376,6 +1380,65 @@ export default function ScreeningDetailPage() {
             <span>View Quality Assessment Metrics</span>
           </button>
         </div>
+      </div>
+
+      {/* Retinal Microvascular Biomarkers (Vasculature Morphometry) */}
+      <div id="retinal-biomarkers-section">
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, flexWrap: 'wrap', gap: 10 }}>
+          <div>
+            <span style={{ fontSize: 11, fontWeight: 700, color: '#0e6264', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+              Vasculature Evidence · Quantitative Morphometry
+            </span>
+          </div>
+          {!isSingleEye && (
+            <div style={{ display: 'flex', background: '#eef4f3', padding: 3, borderRadius: 8 }}>
+              <button
+                onClick={() => setActiveBiomarkerEye('left')}
+                style={{
+                  padding: '5px 12px',
+                  borderRadius: 6,
+                  border: 'none',
+                  background: activeBiomarkerEye === 'left' ? '#0e6264' : 'transparent',
+                  color: activeBiomarkerEye === 'left' ? '#ffffff' : '#3c5a5d',
+                  fontSize: 12,
+                  fontWeight: 700,
+                  cursor: 'pointer'
+                }}
+              >
+                OS · Left Eye
+              </button>
+              <button
+                onClick={() => setActiveBiomarkerEye('right')}
+                style={{
+                  padding: '5px 12px',
+                  borderRadius: 6,
+                  border: 'none',
+                  background: activeBiomarkerEye === 'right' ? '#0e6264' : 'transparent',
+                  color: activeBiomarkerEye === 'right' ? '#ffffff' : '#3c5a5d',
+                  fontSize: 12,
+                  fontWeight: 700,
+                  cursor: 'pointer'
+                }}
+              >
+                OD · Right Eye
+              </button>
+            </div>
+          )}
+        </div>
+        <RetinalBiomarkersPanel
+          biomarkers={activeBiomarkerEye === 'left' ? leftEye.biomarkers : rightEye.biomarkers}
+          eyeLabel={activeBiomarkerEye === 'left' ? 'OS · Left Eye' : 'OD · Right Eye'}
+          odCoords={{
+            x: activeBiomarkerEye === 'left' ? leftEye.od_x : rightEye.od_x,
+            y: activeBiomarkerEye === 'left' ? leftEye.od_y : rightEye.od_y,
+            confidence: activeBiomarkerEye === 'left' ? leftEye.od_confidence : rightEye.od_confidence
+          }}
+          foveaCoords={{
+            x: activeBiomarkerEye === 'left' ? leftEye.fovea_x : rightEye.fovea_x,
+            y: activeBiomarkerEye === 'left' ? leftEye.fovea_y : rightEye.fovea_y,
+            confidence: activeBiomarkerEye === 'left' ? leftEye.fovea_confidence : rightEye.fovea_confidence
+          }}
+        />
       </div>
 
       {/* Clinical Review & Decision Workspace */}
