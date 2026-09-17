@@ -12,6 +12,7 @@ import { RetinalBiomarkersPanel } from '../components/RetinalBiomarkersPanel';
 import { getScreening } from '../services/screenings';
 import { submitReview } from '../services/review';
 import { useScreening } from '../contexts/ScreeningContext';
+import { useAuth } from '../contexts/AuthContext';
 import { BACKEND_URL } from '../services/api';
 
 // Robust URL resolver for model outputs
@@ -48,6 +49,7 @@ export default function ScreeningDetailPage() {
   const { id } = useParams();
   const nav = useNavigate();
   const { setScreeningId, setResult, setPatient, reset } = useScreening();
+  const { user } = useAuth();
 
   const [loading, setLoading] = useState(true);
   const [record, setRecord] = useState<any>(null);
@@ -90,18 +92,30 @@ export default function ScreeningDetailPage() {
           if (live.review_status === 'reviewed' || live.review) {
             setIsReviewed(true);
             const rev = live.review || {};
+            let parsedNotes = rev.notes || '';
+            let parsedPathway = 'Urgent Hospital Eye Service';
+            let parsedPriority = 'Immediate (within 2 weeks)';
+            if (rev.notes) {
+              const pathwayMatch = rev.notes.match(/\[Pathway:\s*([^\]]+)\]/);
+              if (pathwayMatch) parsedPathway = pathwayMatch[1].trim();
+              const priorityMatch = rev.notes.match(/\[Priority:\s*([^\]]+)\]/);
+              if (priorityMatch) parsedPriority = priorityMatch[1].trim();
+              parsedNotes = rev.notes.replace(/\[Pathway:\s*[^\]]+\]\s*/g, '').replace(/\[Priority:\s*[^\]]+\]\s*/g, '').trim();
+            }
             setSignedReviewData({
               decision: rev.decision || 'confirmed',
-              notes: rev.notes || '',
-              reviewer_name: rev.reviewer_name || 'Dr. Anita Sharma (Ophthalmic Reviewer)',
+              notes: parsedNotes,
+              reviewer_name: rev.reviewer_name || (user?.full_name || user?.username || 'Dr. Anita Sharma (Ophthalmic Reviewer)'),
               reviewed_at: rev.reviewed_at || live.created_at,
               timestamp_display: rev.reviewed_at 
                 ? `${new Date(rev.reviewed_at).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })} · ${new Date(rev.reviewed_at).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })} IST`
                 : `${TODAY_STR} · 10:14 IST`,
-              referral_pathway: rev.referral_pathway || 'Urgent Hospital Eye Service',
-              followup_priority: rev.followup_priority || 'Immediate (within 2 weeks)'
+              referral_pathway: parsedPathway,
+              followup_priority: parsedPriority
             });
-            if (rev.notes) setReviewerNotes(rev.notes);
+            if (parsedNotes) setReviewerNotes(parsedNotes);
+            if (parsedPathway) setReferralPathway(parsedPathway);
+            if (parsedPriority) setFollowupRecommendation(parsedPriority);
             if (rev.decision) {
               setReviewDecision(rev.decision === 'modified' ? 'modify' : rev.decision === 'flagged' ? 'flag' : 'confirm');
             }
@@ -259,7 +273,7 @@ export default function ScreeningDetailPage() {
     const reviewObj = {
       decision: mappedDecision,
       notes: reviewerNotes || 'Clinical evaluation verified and signed into audit log.',
-      reviewer_name: 'Dr. Anita Sharma (Ophthalmic Reviewer)',
+      reviewer_name: user?.full_name || user?.username || 'Dr. Anita Sharma (Ophthalmic Reviewer)',
       reviewed_at: now.toISOString(),
       timestamp_display: timestampDisplay,
       referral_pathway: referralPathway,
@@ -1481,7 +1495,7 @@ export default function ScreeningDetailPage() {
                 borderRadius: 8,
                 border: '1px solid #238b65'
               }}>
-                REVIEW COMPLETE · DR. ANITA SHARMA
+                REVIEW COMPLETE · {(signedReviewData?.reviewer_name || 'DR. ANITA SHARMA').toUpperCase()}
               </span>
             </div>
 
@@ -1531,7 +1545,7 @@ export default function ScreeningDetailPage() {
                 <div>
                   <span style={{ fontSize: 11, color: '#7eb6b3', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Accredited Reviewer</span>
                   <div style={{ fontSize: 14, fontWeight: 600, color: '#ffffff', marginTop: 2 }}>
-                    Dr. Anita Sharma, MBBS, MS (Ophthal)
+                    {signedReviewData?.reviewer_name || 'Dr. Anita Sharma, MBBS, MS (Ophthal)'}
                   </div>
                 </div>
               </div>

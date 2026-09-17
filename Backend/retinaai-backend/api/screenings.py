@@ -1,16 +1,56 @@
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 from typing import List, Optional
+from datetime import datetime
 import os
 import aiofiles
 
 from database.db import get_db
-from database.models import Screening, User, Patient
+from database.models import Screening, User, Patient, Review
 from schemas.screening import ScreeningCreate, ScreeningResponse
 from core.dependencies import get_current_user
 from config import settings
 
 router = APIRouter()
+
+
+def serialize_review(review: Optional[Review]) -> Optional[dict]:
+    """Serialize a Review ORM object into a dictionary for API response."""
+    if review is None:
+        return None
+
+    reviewer_name = ""
+    reviewer = getattr(review, "reviewer", None)
+    if reviewer:
+        reviewer_name = getattr(reviewer, "full_name", None) or getattr(reviewer, "username", None) or ""
+
+    return {
+        "id": review.id,
+        "reviewer_id": review.reviewer_id,
+        "reviewer_name": reviewer_name,
+        "decision": review.decision,
+        "final_grade_left": review.final_grade_left,
+        "final_grade_right": review.final_grade_right,
+        "final_referable": review.final_referable,
+        "notes": review.notes,
+        "reviewed_at": review.reviewed_at.isoformat() if getattr(review, "reviewed_at", None) else None,
+        "review_duration_seconds": getattr(review, "review_duration_seconds", None),
+    }
+
+
+def get_latest_review(scr: Screening) -> Optional[Review]:
+    """Retrieve the most recent Review associated with a Screening, if any."""
+    reviews = getattr(scr, "reviews", None)
+    if not reviews:
+        return None
+    try:
+        return max(
+            reviews,
+            key=lambda r: getattr(r, "reviewed_at", None) or datetime.min
+        )
+    except Exception:
+        return reviews[0] if len(reviews) > 0 else None
+
 
 def map_screening_to_response(scr: Screening):
     def build_eye(eye_prefix):
@@ -47,6 +87,8 @@ def map_screening_to_response(scr: Screening):
             "fractal_dimension": getattr(scr, f"{eye_prefix}_fractal_dim"),
         }
 
+    latest_review = get_latest_review(scr)
+
     return {
         "id": scr.id,
         "screening_id": scr.screening_display_id,
@@ -60,13 +102,15 @@ def map_screening_to_response(scr: Screening):
         "overall_referable": scr.overall_referable,
         "recommendation": scr.recommendation,
         "review_status": scr.review_status,
-        "review": None
+        "review": serialize_review(latest_review)
     }
 
 @router.get("", response_model=dict)
 @router.get("/", response_model=dict)
 def list_screenings(page: int = 1, limit: int = 50, patient_id: Optional[str] = None, db: Session = Depends(get_db)):
-    query = db.query(Screening)
+    query = db.query(Screening).options(
+        joinedload(Screening.reviews).joinedload(Review.reviewer)
+    )
     if patient_id:
         patient = db.query(Patient).filter((Patient.id == patient_id) | (Patient.patient_display_id == patient_id)).first()
         pid = patient.id if patient else patient_id
@@ -191,7 +235,9 @@ async def upload_image(
 
 @router.get("/{id}")
 def get_screening(id: str, db: Session = Depends(get_db)):
-    scr = db.query(Screening).filter((Screening.id == id) | (Screening.screening_display_id == id)).first()
+    scr = db.query(Screening).options(
+        joinedload(Screening.reviews).joinedload(Review.reviewer)
+    ).filter((Screening.id == id) | (Screening.screening_display_id == id)).first()
     if not scr:
         raise HTTPException(404, "Screening not found")
     return map_screening_to_response(scr)

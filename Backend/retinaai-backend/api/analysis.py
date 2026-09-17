@@ -1,11 +1,12 @@
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 import cv2
 import time
 from database.db import get_db
-from database.models import Screening
+from database.models import Screening, Review
 from schemas.analysis import AnalyzeRequest
 from models_loader.loaders import pipeline_service, quality_service, enhancement_service
+from api.screenings import serialize_review, get_latest_review
 
 router = APIRouter()
 
@@ -186,13 +187,15 @@ def _screening_response(scr: Screening) -> dict:
         "overall_referable": scr.overall_referable,
         "recommendation": scr.recommendation,
         "review_status": scr.review_status,
-        "review": None,
+        "review": serialize_review(get_latest_review(scr)),
     }
 
 
 @router.post("/{id}/analyze")
 def analyze_screening(id: str, req: AnalyzeRequest, db: Session = Depends(get_db)):
-    scr = db.query(Screening).filter(
+    scr = db.query(Screening).options(
+        joinedload(Screening.reviews).joinedload(Review.reviewer)
+    ).filter(
         (Screening.id == id) | (Screening.screening_display_id == id)
     ).first()
     if not scr:

@@ -112,13 +112,15 @@ export interface ScreeningResult {
 
 export interface ReviewDecision {
   id: string;
+  reviewer_id?: string | null;
   reviewer_name: string;
   decision: 'confirmed' | 'modified' | 'flagged';
   final_grade_left: DRGrade | null;
   final_grade_right: DRGrade | null;
   final_referable: boolean | null;
   notes: string | null;
-  reviewed_at: string;
+  reviewed_at: string | null;
+  review_duration_seconds?: number | null;
 }
 
 export interface Patient {

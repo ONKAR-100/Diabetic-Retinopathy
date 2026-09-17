@@ -49,6 +49,21 @@ class EyeResult(BaseModel):
     vessel_tortuosity: Optional[float] = None
     fractal_dimension: Optional[float] = None
 
+class ReviewData(BaseModel):
+    id: str
+    reviewer_id: Optional[str] = None
+    reviewer_name: Optional[str] = None
+    decision: str
+    final_grade_left: Optional[int] = None
+    final_grade_right: Optional[int] = None
+    final_referable: Optional[bool] = None
+    notes: Optional[str] = None
+    reviewed_at: Optional[str] = None
+    review_duration_seconds: Optional[float] = None
+
+    class Config:
+        from_attributes = True
+
 class ScreeningCreate(BaseModel):
     patient_id: str
     previous_screening_id: Optional[str] = None
@@ -65,7 +80,7 @@ class ScreeningResponse(BaseModel):
     overall_referable: Optional[bool] = None
     recommendation: Optional[str] = None
     review_status: str
-    review: Optional[dict] = None
+    review: Optional[ReviewData] = None
 
     class Config:
         from_attributes = True
