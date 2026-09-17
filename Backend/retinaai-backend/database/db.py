@@ -24,11 +24,10 @@ try:
         conn.execute(text("SELECT 1"))
     logger.info("Connected to Supabase PostgreSQL successfully.")
 except Exception as exc:
-    logger.error(f"FATAL: Cannot connect to Supabase database: {exc}")
-    raise RuntimeError(
-        f"Cannot connect to Supabase database at {settings.DATABASE_URL}. "
-        "Check your DATABASE_URL in .env."
-    ) from exc
+    logger.warning(
+        f"Could not connect to database at {settings.DATABASE_URL}: {exc}. "
+        "Ensure DATABASE_URL in .env is configured when running live database operations."
+    )
 
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 

@@ -2,6 +2,9 @@ import os
 from pydantic_settings import BaseSettings
 from dotenv import load_dotenv
 
+_backend_env = os.path.join(os.path.dirname(__file__), ".env")
+if os.path.exists(_backend_env):
+    load_dotenv(_backend_env)
 load_dotenv()
 
 def _resolve_path(env_var: str, default_rel: str) -> str:
@@ -25,7 +28,7 @@ class Settings(BaseSettings):
     # ── Database (Supabase PostgreSQL) ────────────────────────────────────────
     DATABASE_URL: str = os.getenv(
         "DATABASE_URL",
-        "postgresql://postgres:HvnGpyECrbafyitp@db.xtyofnqmzqkimamgjwuk.supabase.co:5432/postgres"
+        "postgresql://postgres:password@localhost:5432/retinaai"
     )
 
     # ── Supabase Storage ──────────────────────────────────────────────────────
@@ -56,13 +59,18 @@ class Settings(BaseSettings):
     )
     MATLAB_TIMEOUT_SECONDS: int = int(os.getenv("MATLAB_TIMEOUT_SECONDS", "60"))
 
-    # ── Local temp dir (for intermediate processing only — NOT for permanent storage) ──
+    # ── Local static & temp dirs ─────────────────────────────────────────────
+    STATIC_DIR: str = os.getenv(
+        "STATIC_DIR",
+        os.path.abspath(os.path.join(os.path.dirname(__file__), "static"))
+    )
     UPLOAD_DIR: str = os.getenv("UPLOAD_DIR", "static/uploads")
     RESULT_DIR: str = os.getenv("RESULT_DIR", "static/results")
     MAX_UPLOAD_MB: int = int(os.getenv("MAX_UPLOAD_MB", "20"))
 
 settings = Settings()
 
-# Keep local temp dirs for intermediate processing
+# Keep local static & temp dirs for intermediate processing
+os.makedirs(settings.STATIC_DIR, exist_ok=True)
 os.makedirs(settings.UPLOAD_DIR, exist_ok=True)
 os.makedirs(settings.RESULT_DIR, exist_ok=True)

@@ -80,7 +80,7 @@ def ensure_pdf(screening_id: str, db: Session, force: bool = False):
 
 @router.get("/{screening_id}")
 def view_report_pdf(screening_id: str, db: Session = Depends(get_db)):
-    """Redirect the browser directly to the Supabase Storage public URL."""
+    """Redirect the browser directly to the Supabase Storage public URL or serve from local disk."""
     _, _, pdf_url = ensure_pdf(screening_id, db)
 
     # If it's a full HTTP URL (Supabase), redirect to it
@@ -88,10 +88,11 @@ def view_report_pdf(screening_id: str, db: Session = Depends(get_db)):
         return RedirectResponse(url=pdf_url, status_code=302)
 
     # Fallback: serve from local disk
-    if os.path.exists(pdf_url):
+    local_path = storage_service.get_local_path(pdf_url)
+    if local_path and os.path.exists(local_path):
         from fastapi.responses import FileResponse
         return FileResponse(
-            pdf_url,
+            local_path,
             media_type="application/pdf",
             filename=f"RetinaAI_Report_{screening_id}.pdf",
             headers={"Content-Disposition": f"inline; filename=RetinaAI_Report_{screening_id}.pdf"},

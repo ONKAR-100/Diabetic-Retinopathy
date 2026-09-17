@@ -33,6 +33,8 @@ from typing import Optional
 import cv2
 import numpy as np
 
+from config import settings
+
 logger = logging.getLogger(__name__)
 
 # ── Lazy-import supabase so the rest of the app still boots even
@@ -186,14 +188,47 @@ class StorageService:
         self._init()
         return f"{self._base_url}/{bucket}/{path}"
 
+    # ── Local filesystem resolution ──────────────────────────────────────────
+    def get_local_path(self, url_or_path: str) -> Optional[str]:
+        """
+        Convert a local /static/... URL or relative storage path into an absolute
+        filesystem path on the host system. Returns None if url_or_path is an
+        external HTTP(S) URL or empty.
+        """
+        if not url_or_path or url_or_path.startswith("http://") or url_or_path.startswith("https://"):
+            return None
+
+        clean = url_or_path.replace("\\", "/")
+        if clean.startswith("/static/"):
+            rel_path = clean[len("/static/"):]
+        elif clean.startswith("static/"):
+            rel_path = clean[len("static/"):]
+        else:
+            rel_path = clean.lstrip("/")
+
+        parts = [p for p in rel_path.split("/") if p and p != ".."]
+
+        # 1. Check canonical configured STATIC_DIR
+        candidate = os.path.join(settings.STATIC_DIR, *parts)
+        if os.path.exists(candidate):
+            return candidate
+
+        # 2. Check relative to current working directory if different
+        fallback = os.path.join("static", *parts)
+        if os.path.exists(fallback):
+            return os.path.abspath(fallback)
+
+        return candidate
+
     # ── Local fallback ───────────────────────────────────────────────────────
     def _local_fallback_bytes(self, data: bytes, path: str) -> str:
         """Save bytes to local static/ dir and return a /static/... URL."""
-        local_path = os.path.join("static", path)
+        clean_path = path.replace("\\", "/").lstrip("/")
+        local_path = os.path.join(settings.STATIC_DIR, *clean_path.split("/"))
         os.makedirs(os.path.dirname(local_path), exist_ok=True)
         with open(local_path, "wb") as f:
             f.write(data)
-        return f"/static/{path}"
+        return f"/static/{clean_path}"
 
 
 # Singleton instance — import this everywhere
