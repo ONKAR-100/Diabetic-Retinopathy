@@ -1,6 +1,7 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { SectionHeader, Stepper, Card, GradeBadge, Button, Badge } from '../components';
+import { RetinalBiomarkerSummary } from '../components/RetinalBiomarkerSummary';
 import { useScreening } from '../contexts/ScreeningContext';
 import { useAuth } from '../contexts/AuthContext';
 
@@ -33,6 +34,8 @@ export default function ResultPage() {
           <p>Confidence: {((res.right_eye?.confidence_calibrated || 0) * 100).toFixed(1)}%</p>
         </Card>
       </div>
+
+      <RetinalBiomarkerSummary leftEye={res.left_eye} rightEye={res.right_eye} />
       <div style={{ display: 'flex', gap: 12, marginTop: 24, justifyContent: 'space-between', flexWrap: 'wrap' }}>
         <div style={{ display: 'flex', gap: 10 }}>
           <Button variant="secondary" onClick={() => nav('/screening/capture')}>← Capture &amp; Quality</Button>
