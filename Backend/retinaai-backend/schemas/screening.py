@@ -8,6 +8,21 @@ class QualityResult(BaseModel):
     reason: Optional[str] = None
     recapture_message: Optional[str] = None
 
+class BiomarkersResultSchema(BaseModel):
+    avr: Optional[float] = None
+    crae_pixels: Optional[float] = None
+    crve_pixels: Optional[float] = None
+    mean_tortuosity_distance: Optional[float] = None
+    mean_tortuosity_curvature: Optional[float] = None
+    max_tortuosity: Optional[float] = None
+    fractal_dimension: Optional[float] = None
+    fractal_r_squared: Optional[float] = None
+    vessel_density: Optional[float] = None
+    zone_b_count: Optional[int] = None
+    branch_count: Optional[int] = None
+    runtime_seconds: Optional[float] = None
+    status: Optional[str] = "completed"
+
 class EyeResult(BaseModel):
     quality: QualityResult
     original_image_url: Optional[str] = None
@@ -29,6 +44,10 @@ class EyeResult(BaseModel):
     fovea_y: Optional[float] = None
     fovea_confidence: Optional[float] = None
     lesion: Optional[dict] = None
+    biomarkers: Optional[BiomarkersResultSchema] = None
+    avr: Optional[float] = None
+    vessel_tortuosity: Optional[float] = None
+    fractal_dimension: Optional[float] = None
 
 class ScreeningCreate(BaseModel):
     patient_id: str

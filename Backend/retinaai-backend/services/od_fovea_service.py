@@ -1,3 +1,4 @@
+from typing import Optional
 import cv2
 import numpy as np
 import torch
@@ -7,11 +8,11 @@ from dataclasses import dataclass
 
 @dataclass
 class ODFoveaResult:
-    optic_disc_x: float
-    optic_disc_y: float
+    optic_disc_x: Optional[float]
+    optic_disc_y: Optional[float]
     optic_disc_confidence: float
-    fovea_x: float
-    fovea_y: float
+    fovea_x: Optional[float]
+    fovea_y: Optional[float]
     fovea_confidence: float
     overlay_bgr: np.ndarray
 
@@ -42,6 +43,7 @@ class ODFoveaService:
         self.model = None
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.image_size = 512
+        self.confidence_threshold = 0.30
 
     def load(self, checkpoint_path: str):
         try:
@@ -60,7 +62,7 @@ class ODFoveaService:
         orig_h, orig_w = image_bgr.shape[:2]
         
         if self.model is None:
-            return ODFoveaResult(orig_w/2, orig_h/2, 0.0, orig_w/2, orig_h/2, 0.0, image_bgr)
+            return ODFoveaResult(None, None, 0.0, None, None, 0.0, image_bgr)
 
         rgb = cv2.cvtColor(image_bgr, cv2.COLOR_BGR2RGB)
         resized = cv2.resize(rgb, (self.image_size, self.image_size))
@@ -82,8 +84,11 @@ class ODFoveaService:
         od_x_512, od_y_512, od_conf = decode_argmax(probs[0])
         fov_x_512, fov_y_512, fov_conf = decode_argmax(probs[1])
 
-        od_mask = (probs[0] > 0.3).astype(np.uint8)
-        fov_mask = (probs[1] > 0.3).astype(np.uint8)
+        od_valid = od_conf >= self.confidence_threshold
+        fov_valid = fov_conf >= self.confidence_threshold
+
+        od_mask = (probs[0] > self.confidence_threshold).astype(np.uint8) if od_valid else np.zeros((self.image_size, self.image_size), dtype=np.uint8)
+        fov_mask = (probs[1] > self.confidence_threshold).astype(np.uint8) if fov_valid else np.zeros((self.image_size, self.image_size), dtype=np.uint8)
         
         # Resize masks back to original resolution before blending
         od_mask_full = cv2.resize(od_mask, (orig_w, orig_h), interpolation=cv2.INTER_NEAREST)
@@ -92,22 +97,32 @@ class ODFoveaService:
         # Build overlay directly on the original image for crisp markers
         overlay = image_bgr.copy().astype(np.float32)
         color_layer = np.zeros_like(overlay)
-        color_layer[od_mask_full > 0] = (0, 255, 0)     # Green OD (BGR)
-        color_layer[fov_mask_full > 0] = (19, 69, 139)  # Brown fovea (BGR)
+        if od_valid:
+            color_layer[od_mask_full > 0] = (0, 255, 0)     # Green OD (BGR)
+        if fov_valid:
+            color_layer[fov_mask_full > 0] = (19, 69, 139)  # Brown fovea (BGR)
         
         combined = (od_mask_full | fov_mask_full) > 0
-        overlay[combined] = (1.0 - 0.4) * overlay[combined] + 0.4 * color_layer[combined]
+        if np.any(combined):
+            overlay[combined] = (1.0 - 0.4) * overlay[combined] + 0.4 * color_layer[combined]
         overlay_bgr = np.clip(overlay, 0, 255).astype(np.uint8)
 
-        # Scale marker coordinates to original dimensions
-        od_x_full = od_x_512 * orig_w / self.image_size
-        od_y_full = od_y_512 * orig_h / self.image_size
-        fov_x_full = fov_x_512 * orig_w / self.image_size
-        fov_y_full = fov_y_512 * orig_h / self.image_size
+        # Scale marker coordinates to original dimensions only if confident
+        if od_valid:
+            od_x_full = float(od_x_512 * orig_w / self.image_size)
+            od_y_full = float(od_y_512 * orig_h / self.image_size)
+            cv2.drawMarker(overlay_bgr, (int(round(od_x_full)), int(round(od_y_full))), (0, 255, 0), markerType=cv2.MARKER_CROSS, markerSize=20, thickness=2)
+        else:
+            od_x_full = None
+            od_y_full = None
 
-        # Draw markers on the full resolution overlay
-        cv2.drawMarker(overlay_bgr, (int(od_x_full), int(od_y_full)), (0, 255, 0), markerType=cv2.MARKER_CROSS, markerSize=20, thickness=2)
-        cv2.drawMarker(overlay_bgr, (int(fov_x_full), int(fov_y_full)), (19, 69, 139), markerType=cv2.MARKER_CROSS, markerSize=20, thickness=2)
+        if fov_valid:
+            fov_x_full = float(fov_x_512 * orig_w / self.image_size)
+            fov_y_full = float(fov_y_512 * orig_h / self.image_size)
+            cv2.drawMarker(overlay_bgr, (int(round(fov_x_full)), int(round(fov_y_full))), (19, 69, 139), markerType=cv2.MARKER_CROSS, markerSize=20, thickness=2)
+        else:
+            fov_x_full = None
+            fov_y_full = None
 
         return ODFoveaResult(
             optic_disc_x=od_x_full,

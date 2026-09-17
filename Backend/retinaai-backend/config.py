@@ -49,6 +49,12 @@ class Settings(BaseSettings):
     VESSEL_MODEL_PATH: str = _resolve_path("VESSEL_MODEL_PATH", "vessel_extraction/Vessel_Model")
     OD_FOVEA_MODEL_PATH: str = _resolve_path("OD_FOVEA_MODEL_PATH", "od_fovea_localization/best_fundus_localization_model.pth")
     LESION_MODEL_PATH: str = _resolve_path("LESION_MODEL_PATH", "lesion_segmentation/fundus_ensemble_bundle.pth")
+    ENABLE_MATLAB_BIOMARKERS: bool = os.getenv("ENABLE_MATLAB_BIOMARKERS", "true").lower() in ("true", "1", "yes")
+    MATLAB_SCRIPTS_PATH: str = os.getenv(
+        "MATLAB_SCRIPTS_PATH",
+        os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "MATLAB"))
+    )
+    MATLAB_TIMEOUT_SECONDS: int = int(os.getenv("MATLAB_TIMEOUT_SECONDS", "60"))
 
     # ── Local temp dir (for intermediate processing only — NOT for permanent storage) ──
     UPLOAD_DIR: str = os.getenv("UPLOAD_DIR", "static/uploads")

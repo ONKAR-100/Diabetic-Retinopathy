@@ -10,6 +10,7 @@ from services.vessel_service import VesselService
 from services.od_fovea_service import ODFoveaService
 from services.lesion_service import LesionService
 from services.calibration_service import CalibrationService
+from services.matlab_service import MatlabService
 from services.pipeline_service import PipelineService
 from services.report_service import ReportService
 
@@ -23,11 +24,16 @@ od_fovea_service = ODFoveaService()
 lesion_service = LesionService()
 calibration_service = CalibrationService()
 report_service = ReportService()
+matlab_service = MatlabService(
+    matlab_scripts_dir=settings.MATLAB_SCRIPTS_PATH,
+    timeout_sec=settings.MATLAB_TIMEOUT_SECONDS,
+    enabled=settings.ENABLE_MATLAB_BIOMARKERS
+)
 
 pipeline_service = PipelineService(
     quality_service, enhancement_service, dr_service, 
     gradcam_service, vessel_service, od_fovea_service, 
-    lesion_service, calibration_service
+    lesion_service, calibration_service, matlab_service
 )
 
 def load_all_models():

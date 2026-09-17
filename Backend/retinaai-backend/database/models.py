@@ -72,6 +72,10 @@ class Screening(Base):
     left_fovea_confidence = Column(Float, nullable=True)
     left_od_fovea_overlay_path = Column(String, nullable=True)
     left_lesion_result = Column(JSON, nullable=True)
+    left_biomarkers = Column(JSON, nullable=True)
+    left_avr = Column(Float, nullable=True)
+    left_tortuosity = Column(Float, nullable=True)
+    left_fractal_dim = Column(Float, nullable=True)
 
     # RIGHT EYE
     right_image_path = Column(String, nullable=True)
@@ -96,6 +100,10 @@ class Screening(Base):
     right_fovea_confidence = Column(Float, nullable=True)
     right_od_fovea_overlay_path = Column(String, nullable=True)
     right_lesion_result = Column(JSON, nullable=True)
+    right_biomarkers = Column(JSON, nullable=True)
+    right_avr = Column(Float, nullable=True)
+    right_tortuosity = Column(Float, nullable=True)
+    right_fractal_dim = Column(Float, nullable=True)
 
     # Overall
     overall_referable = Column(Boolean, nullable=True)

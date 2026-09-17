@@ -12,11 +12,20 @@ class VesselResult:
     overlay_bgr: np.ndarray
     vessel_density: float
 
+def apply_clahe_lab(bgr_img: np.ndarray, clip_limit: float = 2.0, tile_grid_size: tuple = (8, 8)) -> np.ndarray:
+    """Enhances local vascular contrast across the Luminance channel using CLAHE."""
+    lab = cv2.cvtColor(bgr_img, cv2.COLOR_BGR2LAB)
+    l, a, b = cv2.split(lab)
+    clahe = cv2.createCLAHE(clipLimit=clip_limit, tileGridSize=tile_grid_size)
+    l_eq = clahe.apply(l)
+    enhanced_lab = cv2.merge((l_eq, a, b))
+    return cv2.cvtColor(enhanced_lab, cv2.COLOR_LAB2BGR)
+
 class VesselService:
     def __init__(self):
         self.model = None
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        self.threshold = 0.55
+        self.threshold = 0.50
         self.image_size = 512
 
     def load(self, model_path: str):
@@ -39,7 +48,8 @@ class VesselService:
             encoder = checkpoint.get("encoder", "resnet34")
             in_channels = checkpoint.get("in_channels", 3)
             classes = checkpoint.get("classes", 1)
-            self.threshold = float(checkpoint.get("threshold", 0.55))
+            training_cfg = checkpoint.get("training_config", {})
+            self.threshold = float(checkpoint.get("threshold", training_cfg.get("threshold", 0.50)))
             self.image_size = int(checkpoint.get("image_size", 512))
 
             model = smp.Unet(
@@ -76,7 +86,9 @@ class VesselService:
             binary_mask_full = np.zeros((orig_h, orig_w), dtype=np.uint8)
             return VesselResult(binary_mask_full, image_bgr.copy(), 0.0)
 
-        rgb = cv2.cvtColor(image_bgr, cv2.COLOR_BGR2RGB)
+        # Enhance local microvascular contrast using CLAHE prior to downsampling
+        clahe_bgr = apply_clahe_lab(image_bgr)
+        rgb = cv2.cvtColor(clahe_bgr, cv2.COLOR_BGR2RGB)
         resized = cv2.resize(rgb, (self.image_size, self.image_size))
 
         # Preprocess
@@ -90,19 +102,23 @@ class VesselService:
             logits = self.model(tensor)
             probability = torch.sigmoid(logits)[0, 0].cpu().numpy()
 
-        binary_mask_512 = (probability > self.threshold).astype(np.uint8) * 255
+        # Bilinear upsample continuous probability map to full original resolution
+        # to eliminate 8-pixel blocky stair-stepping and preserve thin microvascular branches
+        prob_full = cv2.resize(probability, (orig_w, orig_h), interpolation=cv2.INTER_LINEAR)
+        binary_mask_full = (prob_full >= self.threshold).astype(np.uint8) * 255
 
-        vessel_density = float(np.sum(binary_mask_512 > 0) / (self.image_size * self.image_size))
+        # Calculate exact coverage percentage at native full resolution
+        vessel_density = float(np.sum(binary_mask_full > 0) / (orig_w * orig_h))
 
-        # Build overlay at model resolution first (512x512)
-        overlay_512 = resized.copy()
-        overlay_512[binary_mask_512 > 0] = [0, 220, 220]  # Cyan in RGB
-        blended_512 = cv2.addWeighted(resized, 0.55, overlay_512, 0.45, 0)
-        blended_bgr_512 = cv2.cvtColor(blended_512, cv2.COLOR_RGB2BGR)
+        # Build clean visual overlay at native resolution
+        overlay_bgr_full = image_bgr.copy().astype(np.float32)
+        cyan_layer = np.zeros_like(overlay_bgr_full)
+        cyan_layer[binary_mask_full > 0] = [220, 220, 0]  # Cyan in BGR
 
-        # Resize BOTH outputs back to original image dimensions for correct alignment
-        binary_mask_full = cv2.resize(binary_mask_512, (orig_w, orig_h), interpolation=cv2.INTER_NEAREST)
-        overlay_bgr_full = cv2.resize(blended_bgr_512, (orig_w, orig_h), interpolation=cv2.INTER_LINEAR)
+        mask_bool = binary_mask_full > 0
+        if np.any(mask_bool):
+            overlay_bgr_full[mask_bool] = 0.55 * overlay_bgr_full[mask_bool] + 0.45 * cyan_layer[mask_bool]
+        overlay_bgr_full = np.clip(overlay_bgr_full, 0, 255).astype(np.uint8)
 
         return VesselResult(
             binary_mask=binary_mask_full,

@@ -49,7 +49,9 @@ class QualityService:
             return QualityResult(status="ungradable", reason="overexposed_glare", recapture_message="Image is overexposed or has flash glare. Reduce brightness.", scores={"overall": 20})
 
         # 3. Sharpness
-        f = np.fft.fftshift(np.fft.fft2(green * (mask_cropped > 0)))
+        green_masked = (green * (mask_cropped > 0)).astype(np.float32)
+        green_512 = cv2.resize(green_masked, (512, 512), interpolation=cv2.INTER_AREA)
+        f = np.fft.fftshift(np.fft.fft2(green_512))
         mag = np.abs(f)
         ch, cw = mag.shape
         cy, cx = ch // 2, cw // 2

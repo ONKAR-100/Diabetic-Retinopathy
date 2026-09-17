@@ -10,7 +10,7 @@ from services.storage_service import storage_service
 
 
 class PipelineService:
-    def __init__(self, quality_service, enhancement_service, dr_service, gradcam_service, vessel_service, od_fovea_service, lesion_service, calibration_service):
+    def __init__(self, quality_service, enhancement_service, dr_service, gradcam_service, vessel_service, od_fovea_service, lesion_service, calibration_service, matlab_service=None):
         self.quality = quality_service
         self.enhancement = enhancement_service
         self.dr = dr_service
@@ -19,8 +19,9 @@ class PipelineService:
         self.od_fovea = od_fovea_service
         self.lesion = lesion_service
         self.calibration = calibration_service
+        self.matlab = matlab_service
 
-    def run(self, image_bgr: np.ndarray, eye: str, screening_id: str) -> Dict[str, Any]:
+    def run(self, image_bgr: np.ndarray, eye: str, screening_id: str, image_path: str = None) -> Dict[str, Any]:
         start = time.time()
 
         # Quality
@@ -64,6 +65,37 @@ class PipelineService:
         lesion_result = self.lesion.predict(enhanced_bgr)
         calibrated_conf = self.calibration.calibrate(dr_result.class_probabilities)
 
+        # ── Biomarker computation via MATLAB Engine ──────────────────────────
+        biomarkers_result = None
+        if self.matlab and getattr(settings, "ENABLE_MATLAB_BIOMARKERS", True):
+            try:
+                local_mask_path = os.path.join(settings.RESULT_DIR, screening_id, f"{eye}_vessel_mask.png")
+                os.makedirs(os.path.dirname(local_mask_path), exist_ok=True)
+                if not os.path.isfile(local_mask_path):
+                    cv2.imwrite(local_mask_path, vessel_result.binary_mask)
+
+                local_img_path = image_path
+                if not (local_img_path and os.path.isfile(local_img_path)):
+                    cand_img = os.path.join(settings.UPLOAD_DIR, f"{screening_id}_{eye}.jpg")
+                    if os.path.isfile(cand_img):
+                        local_img_path = cand_img
+
+                od_pt = (odfov_result.optic_disc_x, odfov_result.optic_disc_y) if odfov_result.optic_disc_x is not None else None
+                fov_pt = (odfov_result.fovea_x, odfov_result.fovea_y) if odfov_result.fovea_x is not None else None
+
+                biomarkers_result = self.matlab.compute_biomarkers(
+                    vessel_mask=vessel_result.binary_mask,
+                    fundus_rgb=cv2.cvtColor(enhanced_bgr, cv2.COLOR_BGR2RGB),
+                    od_coords=od_pt,
+                    fovea_coords=fov_pt,
+                    image_path=local_img_path,
+                    mask_path=local_mask_path
+                )
+            except Exception as e:
+                import logging
+                logging.getLogger(__name__).warning(f"MATLAB biomarker invocation failed gracefully: {e}")
+                biomarkers_result = None
+
         # ── Upload result images to Supabase Storage ─────────────────────────
         bucket = settings.STORAGE_BUCKET_RESULTS
 
@@ -91,6 +123,7 @@ class PipelineService:
             "gradcam_url": gradcam_url,
             "vessel_overlay_url": vessel_overlay,
             "vessel_mask_url": vessel_mask,
+            "vessel_density": vessel_result.vessel_density,
             "od_fovea_overlay_url": od_fovea_url,
             "lesion_overlay_url": lesion_overlay_url,
             "od_x": odfov_result.optic_disc_x,
@@ -102,5 +135,11 @@ class PipelineService:
             "lesion": lesion_result,
             "calibrated_confidence": calibrated_conf,
             "referable": dr_result.referable,
+            "biomarkers": biomarkers_result.to_dict() if biomarkers_result else None,
+            "avr": biomarkers_result.avr if biomarkers_result else None,
+            "crae": biomarkers_result.crae_pixels if biomarkers_result else None,
+            "crve": biomarkers_result.crve_pixels if biomarkers_result else None,
+            "vessel_tortuosity": biomarkers_result.mean_tortuosity_distance if biomarkers_result else None,
+            "fractal_dimension": biomarkers_result.fractal_dimension if biomarkers_result else None,
             "pipeline_time": elapsed
         }

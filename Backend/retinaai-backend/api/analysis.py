@@ -163,6 +163,10 @@ def _build_eye(scr: Screening, eye_prefix: str):
         "fovea_y": getattr(scr, f"{eye_prefix}_fovea_y"),
         "fovea_confidence": getattr(scr, f"{eye_prefix}_fovea_confidence"),
         "lesion": getattr(scr, f"{eye_prefix}_lesion_result"),
+        "biomarkers": getattr(scr, f"{eye_prefix}_biomarkers"),
+        "avr": getattr(scr, f"{eye_prefix}_avr"),
+        "vessel_tortuosity": getattr(scr, f"{eye_prefix}_tortuosity"),
+        "fractal_dimension": getattr(scr, f"{eye_prefix}_fractal_dim"),
     }
 
 
@@ -213,7 +217,7 @@ def analyze_screening(id: str, req: AnalyzeRequest, db: Session = Depends(get_db
         if bgr is None:
             continue
 
-        res = pipeline_service.run(bgr, eye, str(scr.id))
+        res = pipeline_service.run(bgr, eye, str(scr.id), image_path=path)
 
         # Map quality back to DB
         setattr(scr, f"{eye}_quality_status", res["quality"].status)
@@ -241,6 +245,12 @@ def analyze_screening(id: str, req: AnalyzeRequest, db: Session = Depends(get_db
         setattr(scr, f"{eye}_fovea_y", res["fovea_y"])
         setattr(scr, f"{eye}_fovea_confidence", res["fovea_confidence"])
         
+        # Biomarkers (MATLAB integration)
+        setattr(scr, f"{eye}_biomarkers", res.get("biomarkers"))
+        setattr(scr, f"{eye}_avr", res.get("avr"))
+        setattr(scr, f"{eye}_tortuosity", res.get("vessel_tortuosity"))
+        setattr(scr, f"{eye}_fractal_dim", res.get("fractal_dimension"))
+
         # Format lesion result as a JSON dict and store it
         if res.get("lesion"):
             les_obj = res["lesion"]
@@ -281,7 +291,7 @@ def analyze_screening(id: str, req: AnalyzeRequest, db: Session = Depends(get_db
             from api.longitudinal import _run_and_save_comparison
             _run_and_save_comparison(scr.id, db)
         except Exception:
-            pass  # Never let longitudinal failure break the screening workflow
+            db.rollback()  # Never let longitudinal failure break the screening workflow
 
     # Return full structured response so AnalyzePage gets the correct ScreeningResult shape
     return _screening_response(scr)

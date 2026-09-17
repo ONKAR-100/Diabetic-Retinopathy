@@ -41,6 +41,10 @@ def map_screening_to_response(scr: Screening):
             "fovea_y": getattr(scr, f"{eye_prefix}_fovea_y"),
             "fovea_confidence": getattr(scr, f"{eye_prefix}_fovea_confidence"),
             "lesion": getattr(scr, f"{eye_prefix}_lesion_result"),
+            "biomarkers": getattr(scr, f"{eye_prefix}_biomarkers"),
+            "avr": getattr(scr, f"{eye_prefix}_avr"),
+            "vessel_tortuosity": getattr(scr, f"{eye_prefix}_tortuosity"),
+            "fractal_dimension": getattr(scr, f"{eye_prefix}_fractal_dim"),
         }
 
     return {
