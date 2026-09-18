@@ -213,6 +213,22 @@ class LongitudinalComparison(Base):
     right_vessel_density_prev = Column(Float, nullable=True)
     right_vessel_density_curr = Column(Float, nullable=True)
 
+    # Retinal Microvascular Biomarkers Comparison
+    left_avr_prev = Column(Float, nullable=True)
+    left_avr_curr = Column(Float, nullable=True)
+    right_avr_prev = Column(Float, nullable=True)
+    right_avr_curr = Column(Float, nullable=True)
+
+    left_tortuosity_prev = Column(Float, nullable=True)
+    left_tortuosity_curr = Column(Float, nullable=True)
+    right_tortuosity_prev = Column(Float, nullable=True)
+    right_tortuosity_curr = Column(Float, nullable=True)
+
+    left_fractal_dim_prev = Column(Float, nullable=True)
+    left_fractal_dim_curr = Column(Float, nullable=True)
+    right_fractal_dim_prev = Column(Float, nullable=True)
+    right_fractal_dim_curr = Column(Float, nullable=True)
+
     # Lesion Comparison (modular placeholder)
     lesion_comparison = Column(JSON, nullable=True)
 

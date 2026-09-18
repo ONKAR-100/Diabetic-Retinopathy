@@ -50,6 +50,19 @@ def _serialize_comparison(comp: LongitudinalComparison) -> dict:
         "right_fovea_distance": comp.right_fovea_distance,
         "right_vessel_density_prev": comp.right_vessel_density_prev,
         "right_vessel_density_curr": comp.right_vessel_density_curr,
+        # Retinal Microvascular Biomarkers
+        "left_avr_prev": getattr(comp, "left_avr_prev", None),
+        "left_avr_curr": getattr(comp, "left_avr_curr", None),
+        "right_avr_prev": getattr(comp, "right_avr_prev", None),
+        "right_avr_curr": getattr(comp, "right_avr_curr", None),
+        "left_tortuosity_prev": getattr(comp, "left_tortuosity_prev", None),
+        "left_tortuosity_curr": getattr(comp, "left_tortuosity_curr", None),
+        "right_tortuosity_prev": getattr(comp, "right_tortuosity_prev", None),
+        "right_tortuosity_curr": getattr(comp, "right_tortuosity_curr", None),
+        "left_fractal_dim_prev": getattr(comp, "left_fractal_dim_prev", None),
+        "left_fractal_dim_curr": getattr(comp, "left_fractal_dim_curr", None),
+        "right_fractal_dim_prev": getattr(comp, "right_fractal_dim_prev", None),
+        "right_fractal_dim_curr": getattr(comp, "right_fractal_dim_curr", None),
         # Lesion (modular)
         "lesion_comparison": comp.lesion_comparison,
         # Assessment

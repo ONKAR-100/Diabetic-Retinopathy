@@ -206,6 +206,22 @@ export interface LongitudinalComparison {
   right_vessel_density_prev: number | null;
   right_vessel_density_curr: number | null;
 
+  // Retinal microvascular biomarkers
+  left_avr_prev?: number | null;
+  left_avr_curr?: number | null;
+  right_avr_prev?: number | null;
+  right_avr_curr?: number | null;
+
+  left_tortuosity_prev?: number | null;
+  left_tortuosity_curr?: number | null;
+  right_tortuosity_prev?: number | null;
+  right_tortuosity_curr?: number | null;
+
+  left_fractal_dim_prev?: number | null;
+  left_fractal_dim_curr?: number | null;
+  right_fractal_dim_prev?: number | null;
+  right_fractal_dim_curr?: number | null;
+
   // Lesion (modular — null until models support delta)
   lesion_comparison: any | null;
 

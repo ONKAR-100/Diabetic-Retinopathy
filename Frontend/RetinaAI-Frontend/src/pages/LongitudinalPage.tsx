@@ -149,6 +149,12 @@ function EyeComparisonSection({
   const diffUrl = eye === 'left' ? comp.left_diff_overlay_url : comp.right_diff_overlay_url;
   const vdPrev = eye === 'left' ? comp.left_vessel_density_prev : comp.right_vessel_density_prev;
   const vdCurr = eye === 'left' ? comp.left_vessel_density_curr : comp.right_vessel_density_curr;
+  const avrPrev = eye === 'left' ? comp.left_avr_prev : comp.right_avr_prev;
+  const avrCurr = eye === 'left' ? comp.left_avr_curr : comp.right_avr_curr;
+  const tortPrev = eye === 'left' ? comp.left_tortuosity_prev : comp.right_tortuosity_prev;
+  const tortCurr = eye === 'left' ? comp.left_tortuosity_curr : comp.right_tortuosity_curr;
+  const dfPrev = eye === 'left' ? comp.left_fractal_dim_prev : comp.right_fractal_dim_prev;
+  const dfCurr = eye === 'left' ? comp.left_fractal_dim_curr : comp.right_fractal_dim_curr;
 
   const prevImgUrl = prevScr?.[`${eye}_image_path`] || null;
   const currImgUrl = currScr?.[`${eye}_image_path`] || null;
@@ -162,6 +168,8 @@ function EyeComparisonSection({
     : '—';
 
   const regColor = regStatus === 'success' ? '#059669' : regStatus === 'failed' ? '#dc2626' : '#92400e';
+
+  const hasBiomarkers = vdPrev != null || vdCurr != null || avrPrev != null || avrCurr != null || tortPrev != null || tortCurr != null || dfPrev != null || dfCurr != null;
 
   return (
     <div style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 14, padding: 20, marginBottom: 16 }}>
@@ -223,34 +231,108 @@ function EyeComparisonSection({
         </div>
       )}
 
-      {/* Structural */}
-      {(vdPrev !== null || vdCurr !== null) && (
-        <div style={{ background: '#f8faf9', borderRadius: 10, padding: 12 }}>
-          <div style={{ fontSize: 11, fontWeight: 700, color: '#5b7679', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 8 }}>
-            Structural Parameters
+      {/* Structural & Microvascular Biomarkers */}
+      {hasBiomarkers && (
+        <div style={{ background: '#f8faf9', borderRadius: 10, padding: 14, border: '1px solid #edf2f1' }}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: '#5b7679', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 10 }}>
+            Structural &amp; Retinal Microvascular Biomarkers
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-            <div style={{ background: '#fff', padding: '8px 12px', borderRadius: 8, border: '1px solid #e5e7eb' }}>
-              <div style={{ fontSize: 10, color: '#6b7280' }}>Vessel Density (Previous)</div>
-              <div style={{ fontFamily: 'var(--font-mono)', fontSize: 14, fontWeight: 600, color: '#132b2e', marginTop: 2 }}>
-                {vdPrev !== null ? vdPrev.toFixed(3) : '—'}
-              </div>
-            </div>
-            <div style={{ background: '#fff', padding: '8px 12px', borderRadius: 8, border: '1px solid #e5e7eb' }}>
-              <div style={{ fontSize: 10, color: '#6b7280' }}>Vessel Density (Current)</div>
-              <div style={{ fontFamily: 'var(--font-mono)', fontSize: 14, fontWeight: 600, color: '#132b2e', marginTop: 2 }}>
-                {vdCurr !== null ? (
-                  <>
-                    {vdCurr.toFixed(3)}
-                    {vdPrev !== null && (
-                      <span style={{ fontSize: 11, marginLeft: 6, color: (vdCurr - vdPrev) < -0.05 ? '#dc2626' : '#6b7280' }}>
-                        ({vdCurr - vdPrev > 0 ? '+' : ''}{(vdCurr - vdPrev).toFixed(3)})
+
+          <div style={{ background: '#fff', borderRadius: 8, border: '1px solid #e5e7eb', overflow: 'hidden' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+              <thead>
+                <tr style={{ background: '#f9fafb', borderBottom: '1px solid #e5e7eb', textAlign: 'left', color: '#6b7280', fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                  <th style={{ padding: '8px 12px', fontWeight: 600 }}>Biomarker</th>
+                  <th style={{ padding: '8px 12px', fontWeight: 600 }}>Previous</th>
+                  <th style={{ padding: '8px 12px', fontWeight: 600 }}>Current</th>
+                  <th style={{ padding: '8px 12px', fontWeight: 600 }}>Change (Δ)</th>
+                </tr>
+              </thead>
+              <tbody>
+                {/* Row 1: Vessel Density */}
+                <tr style={{ borderBottom: '1px solid #f3f4f6' }}>
+                  <td style={{ padding: '8px 12px', fontWeight: 600, color: '#132b2e' }}>Vessel Density</td>
+                  <td style={{ padding: '8px 12px', fontFamily: 'var(--font-mono)', color: '#374151' }}>
+                    {vdPrev != null ? vdPrev.toFixed(3) : '—'}
+                  </td>
+                  <td style={{ padding: '8px 12px', fontFamily: 'var(--font-mono)', color: '#374151' }}>
+                    {vdCurr != null ? vdCurr.toFixed(3) : '—'}
+                  </td>
+                  <td style={{ padding: '8px 12px', fontFamily: 'var(--font-mono)' }}>
+                    {vdPrev != null && vdCurr != null ? (
+                      <span style={{ fontWeight: 600, color: (vdCurr - vdPrev) < -0.05 ? '#dc2626' : '#374151' }}>
+                        {vdCurr - vdPrev > 0 ? '+' : ''}{(vdCurr - vdPrev).toFixed(3)}
                       </span>
+                    ) : (
+                      <span style={{ color: '#9ca3af' }}>—</span>
                     )}
-                  </>
-                ) : '—'}
-              </div>
-            </div>
+                  </td>
+                </tr>
+
+                {/* Row 2: AVR */}
+                <tr style={{ borderBottom: '1px solid #f3f4f6' }}>
+                  <td style={{ padding: '8px 12px', fontWeight: 600, color: '#132b2e' }}>Arteriolar-to-Venular Ratio (AVR)</td>
+                  <td style={{ padding: '8px 12px', fontFamily: 'var(--font-mono)', color: '#374151' }}>
+                    {avrPrev != null ? avrPrev.toFixed(4) : '—'}
+                  </td>
+                  <td style={{ padding: '8px 12px', fontFamily: 'var(--font-mono)', color: '#374151' }}>
+                    {avrCurr != null ? avrCurr.toFixed(4) : '—'}
+                  </td>
+                  <td style={{ padding: '8px 12px', fontFamily: 'var(--font-mono)' }}>
+                    {avrPrev != null && avrCurr != null ? (
+                      <span style={{ fontWeight: 600, color: '#374151' }}>
+                        {avrCurr - avrPrev > 0 ? '+' : ''}{(avrCurr - avrPrev).toFixed(4)}
+                      </span>
+                    ) : (
+                      <span style={{ color: '#9ca3af' }}>—</span>
+                    )}
+                  </td>
+                </tr>
+
+                {/* Row 3: Tortuosity */}
+                <tr style={{ borderBottom: '1px solid #f3f4f6' }}>
+                  <td style={{ padding: '8px 12px', fontWeight: 600, color: '#132b2e' }}>Mean Distance Tortuosity (τ<sub>d</sub>)</td>
+                  <td style={{ padding: '8px 12px', fontFamily: 'var(--font-mono)', color: '#374151' }}>
+                    {tortPrev != null ? tortPrev.toFixed(4) : '—'}
+                  </td>
+                  <td style={{ padding: '8px 12px', fontFamily: 'var(--font-mono)', color: '#374151' }}>
+                    {tortCurr != null ? tortCurr.toFixed(4) : '—'}
+                  </td>
+                  <td style={{ padding: '8px 12px', fontFamily: 'var(--font-mono)' }}>
+                    {tortPrev != null && tortCurr != null ? (
+                      <span style={{ fontWeight: 600, color: '#374151' }}>
+                        {tortCurr - tortPrev > 0 ? '+' : ''}{(tortCurr - tortPrev).toFixed(4)}
+                      </span>
+                    ) : (
+                      <span style={{ color: '#9ca3af' }}>—</span>
+                    )}
+                  </td>
+                </tr>
+
+                {/* Row 4: Fractal Dimension */}
+                <tr>
+                  <td style={{ padding: '8px 12px', fontWeight: 600, color: '#132b2e' }}>Fractal Dimension (D<sub>f</sub>)</td>
+                  <td style={{ padding: '8px 12px', fontFamily: 'var(--font-mono)', color: '#374151' }}>
+                    {dfPrev != null ? dfPrev.toFixed(4) : '—'}
+                  </td>
+                  <td style={{ padding: '8px 12px', fontFamily: 'var(--font-mono)', color: '#374151' }}>
+                    {dfCurr != null ? dfCurr.toFixed(4) : '—'}
+                  </td>
+                  <td style={{ padding: '8px 12px', fontFamily: 'var(--font-mono)' }}>
+                    {dfPrev != null && dfCurr != null ? (
+                      <span style={{ fontWeight: 600, color: '#374151' }}>
+                        {dfCurr - dfPrev > 0 ? '+' : ''}{(dfCurr - dfPrev).toFixed(4)}
+                      </span>
+                    ) : (
+                      <span style={{ color: '#9ca3af' }}>—</span>
+                    )}
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <div style={{ fontSize: 10.5, color: '#6b7280', marginTop: 8, fontStyle: 'italic', lineHeight: 1.35 }}>
+            * Retinal microvascular biomarkers (AVR, tortuosity, fractal dimension) are computational metrics. Changes reflect algorithmic morphometry across image pairs and do not constitute standalone clinical determinations.
           </div>
         </div>
       )}

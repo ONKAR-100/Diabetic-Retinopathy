@@ -145,6 +145,19 @@ def run_longitudinal_comparison(
             "right_grade_curr": curr_rg,
             "left_prob_curr": [round(p * 100, 1) for p in (current_screening.left_class_probabilities or [])],
             "right_prob_curr": [round(p * 100, 1) for p in (current_screening.right_class_probabilities or [])],
+            # Retinal microvascular biomarkers (baseline: prev is None, curr if present)
+            "left_avr_prev": None,
+            "left_avr_curr": getattr(current_screening, "left_avr", None),
+            "right_avr_prev": None,
+            "right_avr_curr": getattr(current_screening, "right_avr", None),
+            "left_tortuosity_prev": None,
+            "left_tortuosity_curr": getattr(current_screening, "left_tortuosity", None),
+            "right_tortuosity_prev": None,
+            "right_tortuosity_curr": getattr(current_screening, "right_tortuosity", None),
+            "left_fractal_dim_prev": None,
+            "left_fractal_dim_curr": getattr(current_screening, "left_fractal_dim", None),
+            "right_fractal_dim_prev": None,
+            "right_fractal_dim_curr": getattr(current_screening, "right_fractal_dim", None),
             "progression_status": "baseline",
             "supporting_evidence": [f"First valid retinal examination recorded \u00b7 {grade_str}"],
             "recommendation": (
@@ -179,9 +192,15 @@ def run_longitudinal_comparison(
         result[f"{eye}_prob_prev"] = prev_p
         result[f"{eye}_prob_curr"] = curr_p
 
-        # 3. Always extract structural parameters
-        result[f"{eye}_vessel_density_prev"] = getattr(previous_screening, f"{eye}_vessel_density")
-        result[f"{eye}_vessel_density_curr"] = getattr(current_screening, f"{eye}_vessel_density")
+        # 3. Always extract structural parameters and microvascular biomarkers
+        result[f"{eye}_vessel_density_prev"] = getattr(previous_screening, f"{eye}_vessel_density", None)
+        result[f"{eye}_vessel_density_curr"] = getattr(current_screening, f"{eye}_vessel_density", None)
+        result[f"{eye}_avr_prev"] = getattr(previous_screening, f"{eye}_avr", None)
+        result[f"{eye}_avr_curr"] = getattr(current_screening, f"{eye}_avr", None)
+        result[f"{eye}_tortuosity_prev"] = getattr(previous_screening, f"{eye}_tortuosity", None)
+        result[f"{eye}_tortuosity_curr"] = getattr(current_screening, f"{eye}_tortuosity", None)
+        result[f"{eye}_fractal_dim_prev"] = getattr(previous_screening, f"{eye}_fractal_dim", None)
+        result[f"{eye}_fractal_dim_curr"] = getattr(current_screening, f"{eye}_fractal_dim", None)
         result[f"{eye}_od_distance"] = _euclidean_dist(
             getattr(previous_screening, f"{eye}_od_x"), getattr(previous_screening, f"{eye}_od_y"),
             getattr(current_screening, f"{eye}_od_x"), getattr(current_screening, f"{eye}_od_y")
