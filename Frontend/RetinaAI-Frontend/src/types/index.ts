@@ -95,9 +95,11 @@ export interface LesionResult {
 }
 
 export interface ScreeningResult {
+  id?: string;
   screening_id: string;
   patient_id: string;
   patient_name: string;
+  previous_screening_id?: string | null;
   status: ScreeningStatus;
   created_at: string;
   analyzed_at: string | null;

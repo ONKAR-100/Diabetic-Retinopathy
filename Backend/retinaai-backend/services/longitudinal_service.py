@@ -110,6 +110,29 @@ def _grade_name(g):
     return GRADE_NAMES.get(g, f"Grade {g}")
 
 
+def _get_effective_previous_grade(previous_screening, eye: str) -> Optional[int]:
+    """
+    Resolve effective DR grade for the previous screening.
+    If a clinician review exists and represents an authoritative finalized grade
+    ('confirmed' or 'modified') with a usable final grade, use the clinician's
+    verified ground truth. Otherwise, fall back safely to the screening's AI grade.
+    """
+    if not previous_screening:
+        return None
+    try:
+        from api.screenings import get_latest_review
+        latest_rev = get_latest_review(previous_screening)
+        if latest_rev:
+            decision = getattr(latest_rev, "decision", None)
+            if decision in ("confirmed", "modified"):
+                final_grade = getattr(latest_rev, f"final_grade_{eye}", None)
+                if final_grade is not None:
+                    return int(final_grade)
+    except Exception:
+        pass
+    return getattr(previous_screening, f"{eye}_dr_grade", None)
+
+
 def run_longitudinal_comparison(
     current_screening,
     previous_screening,
@@ -180,8 +203,8 @@ def run_longitudinal_comparison(
 
     # Per-eye comparison and image registration
     for eye in ["left", "right"]:
-        # 1. Always extract DR grades from the screenings
-        result[f"{eye}_grade_prev"] = getattr(previous_screening, f"{eye}_dr_grade")
+        # 1. Always extract DR grades (previous screening respects clinician review ground truth)
+        result[f"{eye}_grade_prev"] = _get_effective_previous_grade(previous_screening, eye)
         result[f"{eye}_grade_curr"] = getattr(current_screening, f"{eye}_dr_grade")
 
         # 2. Always extract probabilities (convert to percentages)

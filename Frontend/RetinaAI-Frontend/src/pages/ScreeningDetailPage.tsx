@@ -9,6 +9,7 @@ import {
 } from 'lucide-react';
 import { Badge, Button, GradeBadge } from '../components';
 import { RetinalBiomarkersPanel } from '../components/RetinalBiomarkersPanel';
+import { RetinalBiomarkerSummary } from '../components/RetinalBiomarkerSummary';
 import { getScreening } from '../services/screenings';
 import { submitReview } from '../services/review';
 import { useScreening } from '../contexts/ScreeningContext';
@@ -1005,6 +1006,9 @@ export default function ScreeningDetailPage() {
         )}
 
       </div>
+
+      {/* Bilateral Retinal Microvascular Biomarkers Summary */}
+      <RetinalBiomarkerSummary leftEye={rawLeft} rightEye={rawRight} />
 
       {/* Dedicated Lesion Model & Detection Findings Section */}
       {(() => {

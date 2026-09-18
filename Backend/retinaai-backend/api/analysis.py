@@ -178,6 +178,7 @@ def _screening_response(scr: Screening) -> dict:
         "screening_id": scr.screening_display_id,
         "patient_id": scr.patient.patient_display_id if scr.patient else "",
         "patient_name": scr.patient.name if scr.patient else "",
+        "previous_screening_id": scr.previous_screening_id,
         "status": scr.status,
         "created_at": scr.created_at,
         "analyzed_at": scr.analyzed_at,
