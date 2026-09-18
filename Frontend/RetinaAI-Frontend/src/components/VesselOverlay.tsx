@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { AuthenticatedImg } from './AuthenticatedImg';
 
 interface Props {
   originalUrl: string;
@@ -36,11 +37,11 @@ export function VesselOverlay({ originalUrl, vesselUrl }: Props) {
       </div>
       {/* Show either the pre-blended vessel overlay OR the raw original */}
       <div className="retina-frame">
-        <img
+        <AuthenticatedImg
           src={showOriginal ? originalUrl : (vesselUrl || originalUrl)}
+          fallback={originalUrl}
           alt={showOriginal ? 'Original fundus' : 'Vessel segmentation overlay'}
           style={{ width: '100%', height: 'auto', display: 'block' }}
-          onError={(e) => { (e.target as HTMLImageElement).src = originalUrl; }}
         />
       </div>
       <p style={{ marginTop: 8, fontSize: 11, color: 'var(--text-muted)' }}>

@@ -36,7 +36,7 @@ export default function DashboardPage() {
         const [sum, rec, q] = await Promise.all([
           getAnalyticsSummary().catch(() => null),
           listScreenings({ page: 1 }).catch(() => ({ items: [] })),
-          getReviewQueue().catch(() => [])
+          isDoctor ? getReviewQueue().catch(() => []) : Promise.resolve([])
         ]);
 
         if (sum) setSummary(sum);
@@ -88,7 +88,7 @@ export default function DashboardPage() {
       }
     }
     load();
-  }, []);
+  }, [isDoctor]);
 
   const handleOpenScreening = async (screeningId: string, patientName: string) => {
     reset();

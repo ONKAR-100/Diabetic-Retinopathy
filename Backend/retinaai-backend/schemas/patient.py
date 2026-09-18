@@ -1,16 +1,16 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from typing import Optional
 from datetime import date, datetime
 
 class PatientCreate(BaseModel):
-    name: str
-    age: int
-    sex: str
-    diabetes_duration: int
-    patient_display_id: Optional[str] = None
-    previous_dr: Optional[str] = "None"
+    name: str = Field(..., min_length=1, max_length=150)
+    age: int = Field(..., ge=0, le=130)
+    sex: str = Field(..., min_length=1, max_length=20)
+    diabetes_duration: int = Field(..., ge=0, le=100)
+    patient_display_id: Optional[str] = Field(None, max_length=50)
+    previous_dr: Optional[str] = Field("None", max_length=50)
     previous_screening: Optional[date] = None
-    hba1c: Optional[str] = None
+    hba1c: Optional[str] = Field(None, max_length=20)
 
 class PatientResponse(PatientCreate):
     id: str

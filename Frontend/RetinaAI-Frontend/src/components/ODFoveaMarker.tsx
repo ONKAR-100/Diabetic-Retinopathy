@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { AuthenticatedImg } from './AuthenticatedImg';
 
 interface Props {
   originalUrl: string;
@@ -36,11 +37,11 @@ export function ODFoveaMarker({ originalUrl, overlayUrl }: Props) {
       </div>
       {/* Show the pre-composited overlay image - already drawn by backend on the retina image */}
       <div className="retina-frame">
-        <img
+        <AuthenticatedImg
           src={showOriginal ? originalUrl : (overlayUrl || originalUrl)}
+          fallback={originalUrl}
           alt={showOriginal ? 'Original fundus' : 'Optic disc & fovea overlay'}
           style={{ width: '100%', height: 'auto', display: 'block' }}
-          onError={(e) => { (e.target as HTMLImageElement).src = originalUrl; }}
         />
       </div>
       <div style={{ display: 'flex', gap: 12, marginTop: 8, fontSize: 11, color: 'var(--text-muted)' }}>

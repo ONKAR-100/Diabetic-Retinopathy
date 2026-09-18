@@ -1,13 +1,16 @@
+import logging
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from datetime import datetime
 
 from database.db import get_db
-from database.models import Screening, Review
+from database.models import Screening, Review, Report
 from schemas.review import ReviewCreate, ReviewResponse
 from core.dependencies import get_current_user, require_doctor
-
+from services.storage_service import storage_service
 from api.screenings import map_screening_to_response
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -44,6 +47,21 @@ def submit_review(id: str, req: ReviewCreate, db: Session = Depends(get_db), use
     db.add(rev)
     
     scr.review_status = "reviewed"
+
+    # Synchronize overall_referable with doctor's final judgment
+    if req.final_referable is not None:
+        scr.overall_referable = req.final_referable
+
+    # CLIN-01: Invalidate and purge cached report to ensure subsequent report requests regenerate fresh
+    cached_rep = db.query(Report).filter(Report.screening_id == scr.id).first()
+    if cached_rep:
+        if cached_rep.pdf_path:
+            try:
+                storage_service.delete_asset(cached_rep.pdf_path)
+            except Exception as exc:
+                logger.warning(f"Could not delete old report artifact {cached_rep.pdf_path}: {exc}")
+        db.delete(cached_rep)
+
     db.commit()
     db.refresh(rev)
     

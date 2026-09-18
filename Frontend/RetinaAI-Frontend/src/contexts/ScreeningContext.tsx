@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState } from 'react';
+import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
 import { InProgressScreening, ScreeningResult } from '../types';
 
 export interface EyeQualityData {
@@ -25,6 +25,16 @@ const defaultState: InProgressScreening = {
   currentEye: 'left', result: null
 };
 
+const revokeIfBlob = (url: string | null | undefined) => {
+  if (url && typeof url === 'string' && url.startsWith('blob:')) {
+    try {
+      URL.revokeObjectURL(url);
+    } catch {
+      // ignore
+    }
+  }
+};
+
 interface ScreeningContextValue {
   screening: InProgressScreening;
   qualityData: QualityAssessmentResult | null;
@@ -42,6 +52,15 @@ const ScreeningContext = createContext<ScreeningContextValue | null>(null);
 export function ScreeningProvider({ children }: { children: React.ReactNode }) {
   const [screening, setScreening] = useState<InProgressScreening>(defaultState);
   const [qualityData, setQualityData] = useState<QualityAssessmentResult | null>(null);
+  const screeningRef = useRef(screening);
+  screeningRef.current = screening;
+
+  useEffect(() => {
+    return () => {
+      revokeIfBlob(screeningRef.current.leftPreviewUrl);
+      revokeIfBlob(screeningRef.current.rightPreviewUrl);
+    };
+  }, []);
 
   const setPatient = (id: string, name: string, extra?: { patientDisplayId?: string; isFollowUp?: boolean; previousExamDate?: string; previousExamGrade?: string }) =>
     setScreening(s => ({ 
@@ -58,22 +77,32 @@ export function ScreeningProvider({ children }: { children: React.ReactNode }) {
     setScreening(s => ({ ...s, screeningId: id }));
   
   const setImage = (eye: 'left' | 'right', file: File, previewUrl: string) =>
-    setScreening(s => ({
-      ...s,
-      leftImageFile: eye === 'left' ? file : s.leftImageFile,
-      rightImageFile: eye === 'right' ? file : s.rightImageFile,
-      leftPreviewUrl: eye === 'left' ? previewUrl : s.leftPreviewUrl,
-      rightPreviewUrl: eye === 'right' ? previewUrl : s.rightPreviewUrl,
-    }));
+    setScreening(s => {
+      const oldUrl = eye === 'left' ? s.leftPreviewUrl : s.rightPreviewUrl;
+      if (oldUrl && oldUrl !== previewUrl) {
+        revokeIfBlob(oldUrl);
+      }
+      return {
+        ...s,
+        leftImageFile: eye === 'left' ? file : s.leftImageFile,
+        rightImageFile: eye === 'right' ? file : s.rightImageFile,
+        leftPreviewUrl: eye === 'left' ? previewUrl : s.leftPreviewUrl,
+        rightPreviewUrl: eye === 'right' ? previewUrl : s.rightPreviewUrl,
+      };
+    });
 
   const removeImage = (eye: 'left' | 'right') => {
-    setScreening(s => ({
-      ...s,
-      leftImageFile: eye === 'left' ? null : s.leftImageFile,
-      rightImageFile: eye === 'right' ? null : s.rightImageFile,
-      leftPreviewUrl: eye === 'left' ? null : s.leftPreviewUrl,
-      rightPreviewUrl: eye === 'right' ? null : s.rightPreviewUrl,
-    }));
+    setScreening(s => {
+      const oldUrl = eye === 'left' ? s.leftPreviewUrl : s.rightPreviewUrl;
+      revokeIfBlob(oldUrl);
+      return {
+        ...s,
+        leftImageFile: eye === 'left' ? null : s.leftImageFile,
+        rightImageFile: eye === 'right' ? null : s.rightImageFile,
+        leftPreviewUrl: eye === 'left' ? null : s.leftPreviewUrl,
+        rightPreviewUrl: eye === 'right' ? null : s.rightPreviewUrl,
+      };
+    });
     setQualityData(prev => {
       if (!prev) return null;
       const updatedLeft = eye === 'left' ? undefined : prev.left;
@@ -120,7 +149,11 @@ export function ScreeningProvider({ children }: { children: React.ReactNode }) {
   };
   
   const reset = () => {
-    setScreening(defaultState);
+    setScreening(s => {
+      revokeIfBlob(s.leftPreviewUrl);
+      revokeIfBlob(s.rightPreviewUrl);
+      return defaultState;
+    });
     setQualityData(null);
   };
 

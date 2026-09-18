@@ -383,8 +383,13 @@ def eye_result_block(screening, eye: str, styles):
 
     try:
         if hasattr(screening, 'reviews') and screening.reviews:
-            rev = screening.reviews[0]
+            rev = max(screening.reviews, key=lambda r: getattr(r, 'reviewed_at', None) or datetime.min)
             if rev.decision == 'modified':
+                rgrade = getattr(rev, f"final_grade_{eye}", None)
+                if rgrade is not None:
+                    grade = rgrade
+                    referable = (rgrade >= 2)
+            elif rev.decision == 'confirmed':
                 rgrade = getattr(rev, f"final_grade_{eye}", None)
                 if rgrade is not None:
                     grade = rgrade
@@ -1021,8 +1026,8 @@ class ReportService:
         referable = getattr(screening, "overall_referable", None)
         try:
             if hasattr(screening, 'reviews') and screening.reviews:
-                rev = screening.reviews[0]
-                if rev.decision == 'modified' and rev.final_referable is not None:
+                rev = max(screening.reviews, key=lambda r: getattr(r, 'reviewed_at', None) or datetime.min)
+                if rev.final_referable is not None:
                     referable = rev.final_referable
         except Exception:
             pass
@@ -1067,7 +1072,7 @@ class ReportService:
         review = None
         try:
             if hasattr(screening, 'reviews') and screening.reviews:
-                review = screening.reviews[0]
+                review = max(screening.reviews, key=lambda r: getattr(r, 'reviewed_at', None) or datetime.min)
         except Exception:
             pass
 

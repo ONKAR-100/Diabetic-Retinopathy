@@ -1,3 +1,5 @@
+import logging
+from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from database.db import get_db
@@ -6,6 +8,8 @@ from schemas.patient import PatientCreate
 from api.screenings import map_screening_to_response
 from core.dependencies import get_current_user
 from typing import List, Optional
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -154,4 +158,15 @@ def delete_patient(id: str, db: Session = Depends(get_db), current_user: User = 
         
     db.delete(p)
     db.commit()
+
+    # AUDIT-01: Operational audit logging for clinical record deletion
+    logger.warning(
+        f"[AUDIT] PATIENT_DELETED - patient_id='{p.id}' "
+        f"display_id='{p.patient_display_id}' "
+        f"deleted_by_user_id='{current_user.id}' "
+        f"role='{current_user.role}' "
+        f"screenings_count={len(screening_ids)} "
+        f"timestamp='{datetime.utcnow().isoformat()}'"
+    )
+
     return {"status": "ok", "message": "Patient deleted successfully"}

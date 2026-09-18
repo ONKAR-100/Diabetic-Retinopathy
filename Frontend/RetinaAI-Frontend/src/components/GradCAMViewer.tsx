@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { AuthenticatedImg } from './AuthenticatedImg';
 
 interface Props {
   originalUrl: string;
@@ -39,11 +40,11 @@ export function GradCAMViewer({ originalUrl, gradcamUrl, loading }: Props) {
 
       {/* Show pre-composited overlay image — no absolute positioning needed */}
       <div className="retina-frame">
-        <img
+        <AuthenticatedImg
           src={displayUrl}
+          fallback={originalUrl}
           alt={tab === 'original' ? 'Original fundus' : 'Grad-CAM attention overlay'}
           style={{ width: '100%', height: 'auto', display: 'block' }}
-          onError={(e) => { (e.target as HTMLImageElement).src = originalUrl; }}
         />
       </div>
       <p style={{ marginTop: 8, fontSize: 11, color: 'var(--text-muted)' }}>

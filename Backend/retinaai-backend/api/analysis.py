@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session, joinedload
 import cv2
 import time
+from datetime import datetime
 from database.db import get_db
 from database.models import Screening, Review, User
 from schemas.analysis import AnalyzeRequest
@@ -25,14 +26,20 @@ def assess_quality(id: str, req: AnalyzeRequest, db: Session = Depends(get_db), 
     if not scr:
         raise HTTPException(404, "Screening not found")
 
-    scr.status = "quality_check"
-    db.commit()
-
     eyes_to_check = []
     if req.eye in ["left", "both"] and scr.left_image_path:
         eyes_to_check.append("left")
     if req.eye in ["right", "both"] and scr.right_image_path:
         eyes_to_check.append("right")
+
+    if not eyes_to_check:
+        raise HTTPException(
+            status_code=400,
+            detail="Cannot assess quality: screening has no valid uploaded image for the requested eye(s)."
+        )
+
+    scr.status = "quality_check"
+    db.commit()
 
     results = {}
     any_ungradable = False
@@ -212,14 +219,20 @@ def analyze_screening(id: str, req: AnalyzeRequest, db: Session = Depends(get_db
     if not scr:
         raise HTTPException(404, "Screening not found")
 
-    scr.status = "analyzing"
-    db.commit()
-
     eyes_to_process = []
     if req.eye in ["left", "both"] and scr.left_image_path:
         eyes_to_process.append("left")
     if req.eye in ["right", "both"] and scr.right_image_path:
         eyes_to_process.append("right")
+
+    if not eyes_to_process:
+        raise HTTPException(
+            status_code=400,
+            detail="Cannot perform analysis: screening has no valid uploaded image for the requested eye(s)."
+        )
+
+    scr.status = "analyzing"
+    db.commit()
 
     total_time = 0
     needs_recapture = False
@@ -294,7 +307,7 @@ def analyze_screening(id: str, req: AnalyzeRequest, db: Session = Depends(get_db
         )
         scr.review_status = "pending" if referable else "not_required"
         scr.pipeline_time_seconds = total_time
-        scr.analyzed_at = time.strftime('%Y-%m-%d %H:%M:%S')
+        scr.analyzed_at = datetime.utcnow()
 
     db.commit()
     db.refresh(scr)

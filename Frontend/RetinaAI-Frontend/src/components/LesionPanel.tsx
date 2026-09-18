@@ -2,14 +2,23 @@ import React from 'react';
 import { Card, Badge } from '../components';
 import { LesionResult } from '../types';
 import { BACKEND_URL } from '../services/api';
+import { AuthenticatedImg } from './AuthenticatedImg';
 
 const BACKEND = BACKEND_URL;
 const getUrl = (path: string) => {
   if (path.startsWith('http://') || path.startsWith('https://') || path.startsWith('blob:')) return path;
   const normalized = path.replace(/\\/g, '/');
+  if (normalized.includes('/api/media/')) {
+    const idx = normalized.indexOf('/api/media/');
+    return `${BACKEND}${normalized.slice(idx)}`;
+  }
   const staticIdx = normalized.indexOf('static/');
-  if (staticIdx !== -1) return `${BACKEND}/${normalized.slice(staticIdx)}`;
-  return `${BACKEND}${normalized.startsWith('/') ? normalized : `/${normalized}`}`;
+  if (staticIdx !== -1) {
+    const rel = normalized.slice(staticIdx + 'static/'.length);
+    return `${BACKEND}/api/media/${rel}`;
+  }
+  const clean = normalized.startsWith('/') ? normalized : `/${normalized}`;
+  return `${BACKEND}/api/media${clean}`;
 };
 
 export function LesionPanel({ lesion }: { lesion: LesionResult | null }) {
@@ -65,10 +74,10 @@ export function LesionPanel({ lesion }: { lesion: LesionResult | null }) {
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
       {lesion.overlay_url && (
         <Card style={{ padding: 0, overflow: 'hidden' }}>
-          <img 
-            src={getUrl(lesion.overlay_url)} 
-            alt="Lesion Segmentation Overlay" 
-            style={{ width: '100%', height: 'auto', display: 'block' }} 
+          <AuthenticatedImg
+            src={getUrl(lesion.overlay_url)}
+            alt="Lesion Segmentation Overlay"
+            style={{ width: '100%', height: 'auto', display: 'block' }}
           />
           {/* Color Legend Bar */}
           <div style={{ 

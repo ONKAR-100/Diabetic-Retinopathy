@@ -21,20 +21,29 @@ const BACKEND = BACKEND_URL;
  */
 const pathToUrl = (path: string | null | undefined, fallback = '/retina.svg'): string => {
   if (!path) return fallback;
-  if (path.startsWith('http://') || path.startsWith('https://') || path.startsWith('blob:')) return path;
+  if (path.startsWith('http://') || path.startsWith('https://') || path.startsWith('blob:') || path.startsWith('data:')) return path;
 
   // Normalize backslashes to forward slashes
   const normalized = path.replace(/\\/g, '/');
 
-  // If it contains "static/" anywhere, take from there
-  const staticIdx = normalized.indexOf('static/');
-  if (staticIdx !== -1) {
-    return `${BACKEND}/${normalized.slice(staticIdx)}`;
+  // If it contains "api/media/", preserve it
+  if (normalized.includes('/api/media/')) {
+    const idx = normalized.indexOf('/api/media/');
+    return `${BACKEND}${normalized.slice(idx)}`;
+  }
+  if (normalized.startsWith('api/media/')) {
+    return `${BACKEND}/${normalized}`;
   }
 
-  // Relative path already
+  // If it contains "static/" anywhere, strip it and use /api/media
+  const staticIdx = normalized.indexOf('static/');
+  if (staticIdx !== -1) {
+    const rel = normalized.slice(staticIdx + 'static/'.length);
+    return `${BACKEND}/api/media/${rel}`;
+  }
+
   const clean = normalized.startsWith('/') ? normalized : `/${normalized}`;
-  return `${BACKEND}${clean}`;
+  return `${BACKEND}/api/media${clean}`;
 };
 
 export default function ExplainPage() {

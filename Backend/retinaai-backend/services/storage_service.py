@@ -368,6 +368,49 @@ class StorageService:
             f.write(data)
         return f"/api/media/{clean_path}"
 
+    def delete_asset(self, url_or_path: Optional[str]) -> bool:
+        """
+        Delete a clinical asset from private Supabase Storage or local disk.
+        Returns True if deleted or already absent, False if deletion failed.
+        """
+        if not url_or_path:
+            return True
+
+        self._init()
+        clean = url_or_path.replace("\\", "/").strip()
+        deleted = False
+
+        # 1. Supabase deletion if client is available
+        if self._client is not None:
+            for bucket in [settings.STORAGE_BUCKET_UPLOADS, settings.STORAGE_BUCKET_RESULTS, settings.STORAGE_BUCKET_REPORTS]:
+                for marker in [f"/storage/v1/object/public/{bucket}/", f"/storage/v1/object/sign/{bucket}/", f"{bucket}/"]:
+                    if marker in clean:
+                        obj_path = clean.split(marker, 1)[1].split("?")[0]
+                        try:
+                            self._client.storage.from_(bucket).remove([obj_path])
+                            deleted = True
+                            logger.info(f"Deleted Supabase object: {bucket}/{obj_path}")
+                        except Exception as exc:
+                            logger.warning(f"Failed to delete Supabase object {bucket}/{obj_path}: {exc}")
+                        break
+
+        # 2. Local filesystem deletion
+        local_path = self.get_local_path(clean)
+        if not local_path or not os.path.exists(local_path):
+            candidate = os.path.join(settings.STATIC_DIR, clean.lstrip("/"))
+            if os.path.exists(candidate):
+                local_path = candidate
+
+        if local_path and os.path.exists(local_path):
+            try:
+                os.unlink(local_path)
+                deleted = True
+                logger.info(f"Deleted local asset: {local_path}")
+            except Exception as exc:
+                logger.warning(f"Failed to delete local asset {local_path}: {exc}")
+
+        return deleted
+
 
 # Singleton instance — import this everywhere
 storage_service = StorageService()

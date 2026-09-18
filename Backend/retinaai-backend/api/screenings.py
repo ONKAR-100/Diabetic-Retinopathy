@@ -1,8 +1,13 @@
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, Query
 from sqlalchemy.orm import Session, joinedload
 from typing import List, Optional
 from datetime import datetime
 import os
+import io
+import logging
+import cv2
+import numpy as np
+from PIL import Image as PILImage
 import aiofiles
 
 from database.db import get_db
@@ -10,6 +15,8 @@ from database.models import Screening, User, Patient, Review
 from schemas.screening import ScreeningCreate, ScreeningResponse
 from core.dependencies import get_current_user
 from config import settings
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -115,7 +122,13 @@ def map_screening_to_response(scr: Screening):
 
 @router.get("", response_model=dict)
 @router.get("/", response_model=dict)
-def list_screenings(page: int = 1, limit: int = 50, patient_id: Optional[str] = None, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+def list_screenings(
+    page: int = Query(1, ge=1, description="Page number (1-indexed)"),
+    limit: int = Query(50, ge=1, le=100, description="Page size (max 100)"),
+    patient_id: Optional[str] = None,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
     query = db.query(Screening).options(
         joinedload(Screening.reviews).joinedload(Review.reviewer)
     )
@@ -193,12 +206,10 @@ def create_screening(req: ScreeningCreate, db: Session = Depends(get_db), user: 
     
     return map_screening_to_response(scr)
 
-from fastapi import Form
-
 @router.post("/{id}/upload")
 async def upload_image(
     id: str,
-    eye: str = Form("left"),
+    eye: str = Form(...),
     file: UploadFile = File(None),
     image: UploadFile = File(None),
     db: Session = Depends(get_db),
@@ -208,22 +219,93 @@ async def upload_image(
     if not upload:
         raise HTTPException(400, "No image file provided")
 
+    # 1. Strict eye validation
+    clean_eye = (eye or "").strip().lower()
+    if clean_eye not in ("left", "right"):
+        raise HTTPException(422, detail="Invalid eye parameter. Must be 'left' or 'right'.")
+
     scr = db.query(Screening).filter((Screening.id == id) | (Screening.screening_display_id == id)).first()
     if not scr:
         raise HTTPException(404, "Screening not found")
 
-    content = await upload.read()
-    ext = upload.filename.split('.')[-1].lower() if '.' in upload.filename else 'jpg'
+    # 2. Extension allowlist
+    ALLOWED_EXTENSIONS = {".jpg", ".jpeg", ".png"}
+    filename = upload.filename or "upload.jpg"
+    raw_ext = os.path.splitext(filename)[1].lower()
+    if not raw_ext:
+        raw_ext = ".jpg"
+    if raw_ext not in ALLOWED_EXTENSIONS:
+        raise HTTPException(
+            415,
+            detail="Unsupported file format. Only JPEG (.jpg, .jpeg) and PNG (.png) images are accepted."
+        )
+
+    # 3. Bounded chunked read to enforce MAX_UPLOAD_MB without memory exhaustion
+    max_bytes = settings.MAX_UPLOAD_MB * 1024 * 1024
+    if upload.size is not None and upload.size > max_bytes:
+        raise HTTPException(413, detail=f"Upload exceeds maximum allowed size of {settings.MAX_UPLOAD_MB}MB.")
+
+    CHUNK_SIZE = 64 * 1024  # 64 KB
+    chunks = []
+    total_size = 0
+    while True:
+        chunk = await upload.read(CHUNK_SIZE)
+        if not chunk:
+            break
+        total_size += len(chunk)
+        if total_size > max_bytes:
+            raise HTTPException(413, detail=f"Upload exceeds maximum allowed size of {settings.MAX_UPLOAD_MB}MB.")
+        chunks.append(chunk)
+
+    content = b"".join(chunks)
+    if not content:
+        raise HTTPException(400, detail="Uploaded image file is empty.")
+
+    # 4. Magic / signature validation
+    is_jpeg = content.startswith(b"\xff\xd8\xff")
+    is_png = content.startswith(b"\x89PNG\r\n\x1a\n")
+
+    if not (is_jpeg or is_png):
+        raise HTTPException(400, detail="Invalid file signature. Uploaded file is not a valid JPEG or PNG image.")
+
+    canonical_ext = ".png" if is_png else ".jpg"
+
+    # 5. Image dimension safety & decompression-bomb protection via PIL header inspection
+    try:
+        with PILImage.open(io.BytesIO(content)) as img:
+            img.verify()
+            w, h = img.size
+            if w < 100 or h < 100:
+                raise HTTPException(400, detail="Image dimensions are too small for clinical retinal analysis (minimum 100x100).")
+            if w > settings.MAX_IMAGE_WIDTH or h > settings.MAX_IMAGE_HEIGHT:
+                raise HTTPException(
+                    400,
+                    detail=f"Image dimensions ({w}x{h}) exceed maximum allowed ({settings.MAX_IMAGE_WIDTH}x{settings.MAX_IMAGE_HEIGHT})."
+                )
+            if (w * h) > settings.MAX_IMAGE_PIXELS:
+                raise HTTPException(400, detail="Image pixel count exceeds safe clinical processing limits.")
+    except (PILImage.DecompressionBombError, PILImage.DecompressionBombWarning):
+        raise HTTPException(400, detail="Image exceeds safe decompression limits.")
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.warning(f"PIL verification failed for uploaded image: {exc}")
+        raise HTTPException(400, detail="Corrupted or invalid image file. Unable to decode retinal image.")
+
+    # 6. OpenCV decode validation before persistence
+    buf = np.frombuffer(content, dtype=np.uint8)
+    decoded = cv2.imdecode(buf, cv2.IMREAD_COLOR)
+    if decoded is None:
+        raise HTTPException(400, detail="Corrupted or invalid image file. Unable to decode retinal image.")
 
     # ── Upload directly to Supabase Storage ─────────────────────────────────
     from services.storage_service import storage_service
-    from config import settings as cfg
 
-    storage_path = f"{scr.id}_{eye}.{ext}"
-    content_type = "image/jpeg" if ext in ("jpg", "jpeg") else "image/png"
+    storage_path = f"{scr.id}_{clean_eye}{canonical_ext}"
+    content_type = "image/png" if is_png else "image/jpeg"
     public_url = storage_service.upload_bytes(
         content,
-        cfg.STORAGE_BUCKET_UPLOADS,
+        settings.STORAGE_BUCKET_UPLOADS,
         storage_path,
         content_type,
     )
@@ -233,7 +315,7 @@ async def upload_image(
     with open(local_path, 'wb') as f:
         f.write(content)
 
-    if eye == "left":
+    if clean_eye == "left":
         scr.left_image_path = local_path   # local path for pipeline use
     else:
         scr.right_image_path = local_path  # local path for pipeline use

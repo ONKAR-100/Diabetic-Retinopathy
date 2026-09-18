@@ -21,6 +21,9 @@ from config import settings
 from services.storage_service import storage_service
 from core.dependencies import get_current_user
 
+import logging
+logger = logging.getLogger(__name__)
+
 router = APIRouter()
 
 
@@ -63,8 +66,11 @@ def ensure_pdf(screening_id: str, db: Session, force: bool = False):
             pdf_buffer, settings.STORAGE_BUCKET_REPORTS, storage_path
         )
     except Exception as exc:
-        traceback.print_exc()
-        raise HTTPException(500, f"Failed to upload report to storage: {str(exc)}")
+        logger.error(f"Failed to upload report to storage for {scr.screening_display_id}: {exc}", exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail="Failed to save diagnostic report to storage. Please try again later."
+        )
 
     # Persist / update Report record
     if not rep:

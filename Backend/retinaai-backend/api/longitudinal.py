@@ -6,6 +6,7 @@ Endpoints:
   GET   /api/screenings/{id}/comparison     - Retrieve comparison result for a screening
   GET   /api/patients/{id}/timeline         - Patient examination timeline with comparison summaries
 """
+import logging
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from database.db import get_db
@@ -13,6 +14,8 @@ from database.models import Screening, Patient, LongitudinalComparison, User
 from core.dependencies import get_current_user
 from services.longitudinal_service import run_longitudinal_comparison
 from services.storage_service import storage_service
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -131,27 +134,30 @@ def _run_and_save_comparison(screening_id: str, db: Session) -> LongitudinalComp
         scr.previous_screening_id = previous.id
         db.commit()
 
-    # If a comparison already exists, delete it (re-run)
+    # Check for existing comparison
     existing = db.query(LongitudinalComparison).filter(
         LongitudinalComparison.current_screening_id == scr.id
     ).first()
-    if existing:
-        db.delete(existing)
-        db.commit()
 
     try:
         data = run_longitudinal_comparison(scr, previous, db)
     except Exception as exc:
-        # Failsafe: never crash the outer workflow
+        logger.error(f"Longitudinal comparison execution failed for screening {scr.id}: {exc}", exc_info=True)
+        # REL-03: If a prior valid comparison already exists, preserve it instead of destroying it
+        if existing:
+            logger.info(f"Preserving existing valid comparison {existing.id} for screening {scr.id} after recomputation failure.")
+            return existing
+
+        # LEAK-01: Failsafe without leaking internal exception strings to client or database
         data = {
             "patient_id": scr.patient_id,
             "previous_screening_id": previous.id if previous else None,
             "current_screening_id": scr.id,
             "progression_status": "indeterminate",
-            "supporting_evidence": [f"Comparison failed: {str(exc)[:200]}"],
+            "supporting_evidence": ["Automated longitudinal registration and comparison could not be completed."],
             "recommendation": (
                 "Current screening completed. Longitudinal comparison could not be completed "
-                "due to an internal error."
+                "due to an internal processing error."
             ),
             "ai_explanation": (
                 "Longitudinal comparison encountered an error and could not be completed. "
@@ -159,8 +165,16 @@ def _run_and_save_comparison(screening_id: str, db: Session) -> LongitudinalComp
             ),
         }
 
-    comp = LongitudinalComparison(**{k: v for k, v in data.items() if hasattr(LongitudinalComparison, k)})
-    db.add(comp)
+    # If existing comparison exists and new comparison succeeded, update in-place
+    if existing:
+        for k, v in data.items():
+            if hasattr(existing, k) and k not in ("id", "created_at"):
+                setattr(existing, k, v)
+        comp = existing
+    else:
+        comp = LongitudinalComparison(**{k: v for k, v in data.items() if hasattr(LongitudinalComparison, k)})
+        db.add(comp)
+
     db.commit()
     db.refresh(comp)
     return comp

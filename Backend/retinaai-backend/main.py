@@ -13,8 +13,11 @@ try:
 except Exception:
     pass
 
+from config import settings
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    settings.validate_jwt_secret()
     load_all_models()
     yield
 
@@ -22,7 +25,8 @@ app = FastAPI(title="RetinaAI Backend", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=settings.cors_origins_list,
+    allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
