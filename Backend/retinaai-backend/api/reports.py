@@ -9,6 +9,7 @@ local disk needed for permanent storage.
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse, RedirectResponse
 from sqlalchemy.orm import Session
+from datetime import datetime
 import io
 import os
 import traceback
@@ -72,12 +73,14 @@ def ensure_pdf(screening_id: str, db: Session, force: bool = False):
             detail="Failed to save diagnostic report to storage. Please try again later."
         )
 
-    # Persist / update Report record
+    # Persist / update Report record (REP-01: ensure generated_at reflects latest generation)
+    now_utc = datetime.utcnow()
     if not rep:
-        rep = Report(screening_id=scr.id, pdf_path=pdf_url)
+        rep = Report(screening_id=scr.id, pdf_path=pdf_url, generated_at=now_utc)
         db.add(rep)
     else:
         rep.pdf_path = pdf_url
+        rep.generated_at = now_utc
 
     db.commit()
     db.refresh(rep)

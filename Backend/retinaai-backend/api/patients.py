@@ -6,7 +6,8 @@ from database.db import get_db
 from database.models import Patient, Screening, User
 from schemas.patient import PatientCreate
 from api.screenings import map_screening_to_response
-from core.dependencies import get_current_user
+from core.dependencies import get_current_user, require_doctor
+from services.storage_service import storage_service
 from typing import List, Optional
 
 logger = logging.getLogger(__name__)
@@ -126,18 +127,58 @@ def create_patient(patient: PatientCreate, db: Session = Depends(get_db), curren
 
 
 @router.delete("/{id}")
-def delete_patient(id: str, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+def delete_patient(id: str, db: Session = Depends(get_db), current_user: User = Depends(require_doctor)):
     p = db.query(Patient).filter((Patient.id == id) | (Patient.patient_display_id == id)).first()
     if not p:
         raise HTTPException(404, "Patient not found")
-    # Delete associated longitudinal comparisons, reports, reviews, and screenings
+    # Delete associated longitudinal comparisons, reports, reviews, screenings, and storage assets
     from database.models import Report, Review, LongitudinalComparison
-    
-    # 1. Delete longitudinal comparisons linked directly to this patient
-    db.query(LongitudinalComparison).filter(LongitudinalComparison.patient_id == p.id).delete(synchronize_session=False)
 
     screenings = db.query(Screening).filter(Screening.patient_id == p.id).all()
     screening_ids = [s.id for s in screenings]
+
+    # DATA-01: Collect and delete all associated storage assets via storage abstraction
+    assets_to_delete = set()
+
+    # 1. Longitudinal comparison diff overlays
+    comp_filter = (LongitudinalComparison.patient_id == p.id)
+    if screening_ids:
+        comp_filter = comp_filter | (LongitudinalComparison.current_screening_id.in_(screening_ids)) | (LongitudinalComparison.previous_screening_id.in_(screening_ids))
+    comps = db.query(LongitudinalComparison).filter(comp_filter).all()
+    for comp in comps:
+        if comp.left_diff_overlay_path:
+            assets_to_delete.add(comp.left_diff_overlay_path)
+        if comp.right_diff_overlay_path:
+            assets_to_delete.add(comp.right_diff_overlay_path)
+
+    # 2. PDF Reports
+    reps = db.query(Report).filter(Report.screening_id.in_(screening_ids)).all() if screening_ids else []
+    for rep in reps:
+        if rep.pdf_path:
+            assets_to_delete.add(rep.pdf_path)
+
+    # 3. Screening image, overlay, and model outputs
+    for s in screenings:
+        for prefix in ["left", "right"]:
+            for field in ["image_path", "gradcam_path", "vessel_mask_path", "vessel_overlay_path", "od_fovea_overlay_path"]:
+                val = getattr(s, f"{prefix}_{field}", None)
+                if val:
+                    assets_to_delete.add(val)
+            lesion = getattr(s, f"{prefix}_lesion_result", None)
+            if isinstance(lesion, dict):
+                overlay = lesion.get("overlay_url") or lesion.get("overlay_path")
+                if overlay:
+                    assets_to_delete.add(overlay)
+
+    # Safely delete all collected clinical media from storage
+    for asset in assets_to_delete:
+        try:
+            storage_service.delete_asset(asset)
+        except Exception as exc:
+            logger.warning(f"Failed to delete clinical storage asset '{asset}' during patient deletion: {exc}")
+
+    # 4. Delete longitudinal comparisons linked directly to this patient
+    db.query(LongitudinalComparison).filter(LongitudinalComparison.patient_id == p.id).delete(synchronize_session=False)
 
     if screening_ids:
         # Delete any comparisons referencing these screenings as previous or current

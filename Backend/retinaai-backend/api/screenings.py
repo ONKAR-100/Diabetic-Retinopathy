@@ -228,6 +228,13 @@ async def upload_image(
     if not scr:
         raise HTTPException(404, "Screening not found")
 
+    # CLIN-03: Reviewed screening immutability guard
+    if scr.review_status == "reviewed":
+        raise HTTPException(
+            status_code=409,
+            detail="Cannot upload or replace images for a screening that has been finalized by clinical review."
+        )
+
     # 2. Extension allowlist
     ALLOWED_EXTENSIONS = {".jpg", ".jpeg", ".png"}
     filename = upload.filename or "upload.jpg"

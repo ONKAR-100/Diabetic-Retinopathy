@@ -382,7 +382,25 @@ def run_longitudinal_comparison(
     )
 
     # PROGRESSION STATUS
-    if all_failed and not any(result.get(f"{eye}_grade_prev") is None for eye in ["left", "right"]):
+    has_valid_prev_grade = any(
+        result.get(f"{eye}_grade_prev") is not None for eye in ["left", "right"]
+    )
+    if not has_valid_prev_grade:
+        progression_status = "indeterminate"
+        evidence.append(
+            "Previous examination lacks valid DR grades for comparison -- progression cannot be established."
+        )
+        recommendation = (
+            "Longitudinal comparison could not establish disease progression because the previous "
+            "examination does not contain valid DR grading results. Clinical review is recommended."
+        )
+        ai_explanation = (
+            "Automated longitudinal progression analysis requires prior validated DR classification data. "
+            "Neither eye in the selected previous examination contains a valid DR grade for comparison. "
+            "Consequently, progression status cannot be evaluated and is marked indeterminate. "
+            "The AI-assisted DR classification result for the current examination remains available."
+        )
+    elif all_failed and not any(result.get(f"{eye}_grade_prev") is None for eye in ["left", "right"]):
         # Both eyes tried and failed registration
         progression_status = "indeterminate"
         recommendation = (

@@ -15,6 +15,7 @@ import { submitReview } from '../services/review';
 import { useScreening } from '../contexts/ScreeningContext';
 import { useAuth } from '../contexts/AuthContext';
 import { BACKEND_URL, apiClient } from '../services/api';
+import { AuthenticatedImg } from '../components/AuthenticatedImg';
 
 // Robust URL resolver for model outputs
 const BACKEND = BACKEND_URL;
@@ -36,73 +37,7 @@ const pathToUrl = (path: string | null | undefined, fallback = '/retina.svg'): s
   return `${BACKEND}/api/media${clean}`;
 };
 
-function AuthenticatedImg({
-  src,
-  alt,
-  fallback = '/retina.svg',
-  style,
-  className,
-  onError,
-  ...props
-}: React.ImgHTMLAttributes<HTMLImageElement> & { fallback?: string }) {
-  const [blobUrl, setBlobUrl] = useState<string | null>(null);
-  const [hasError, setHasError] = useState(false);
 
-  useEffect(() => {
-    setHasError(false);
-    if (!src || src === fallback || src.startsWith('data:') || src.startsWith('blob:')) {
-      setBlobUrl(null);
-      return;
-    }
-
-    if ((src.startsWith('http://') || src.startsWith('https://')) && !src.includes('/api/media/')) {
-      setBlobUrl(null);
-      return;
-    }
-
-    let active = true;
-    let objectUrl: string | null = null;
-
-    apiClient.get(src, { responseType: 'blob' })
-      .then(res => {
-        if (!active) return;
-        objectUrl = URL.createObjectURL(new Blob([res.data]));
-        setBlobUrl(objectUrl);
-      })
-      .catch(err => {
-        if (!active) return;
-        console.error('Failed to load protected media:', err);
-        setHasError(true);
-      });
-
-    return () => {
-      active = false;
-      if (objectUrl) {
-        URL.revokeObjectURL(objectUrl);
-      }
-    };
-  }, [src, fallback]);
-
-  const effectiveSrc = hasError
-    ? fallback
-    : blobUrl
-    ? blobUrl
-    : (src || fallback);
-
-  return (
-    <img
-      src={effectiveSrc}
-      alt={alt}
-      style={style}
-      className={className}
-      onError={(e) => {
-        setHasError(true);
-        if (onError) onError(e);
-      }}
-      {...props}
-    />
-  );
-}
 
 const getGradeName = (grade: number | undefined | null, name: string | undefined | null): string => {
   if (name && !name.toLowerCase().startsWith('grade')) return name;

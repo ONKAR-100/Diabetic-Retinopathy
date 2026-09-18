@@ -1,17 +1,80 @@
-import React from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useEffect, useState } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { SectionHeader, Stepper, Card, GradeBadge, Button, Badge } from '../components';
 import { RetinalBiomarkerSummary } from '../components/RetinalBiomarkerSummary';
 import { useScreening } from '../contexts/ScreeningContext';
 import { useAuth } from '../contexts/AuthContext';
+import { getScreening } from '../services/screenings';
 
 export default function ResultPage() {
-  const { screening } = useScreening();
+  const { screening, setResult, setScreeningId, setPatient } = useScreening();
   const nav = useNavigate();
+  const [searchParams] = useSearchParams();
   const { isDoctor } = useAuth();
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const queryId = searchParams.get('id');
   const res = screening.result;
 
-  if (!res) return <div>No result</div>;
+  useEffect(() => {
+    // If result is already present in context, retain existing behavior
+    if (res) return;
+
+    if (queryId) {
+      setLoading(true);
+      setError(null);
+      getScreening(queryId)
+        .then(data => {
+          if (data && (data.left_eye || data.right_eye || data.overall_referable !== undefined)) {
+            setScreeningId(data.screening_id || data.id || queryId);
+            if (data.patient_id) {
+              setPatient(data.patient_id, data.patient_name || '');
+            }
+            setResult(data as any);
+          } else {
+            setError(`Screening '${queryId}' does not have completed analysis results.`);
+          }
+        })
+        .catch(err => {
+          setError(err?.response?.data?.detail || 'Failed to load screening result.');
+        })
+        .finally(() => {
+          setLoading(false);
+        });
+    }
+  }, [queryId, res, setResult, setScreeningId, setPatient]);
+
+  if (loading) {
+    return (
+      <>
+        <SectionHeader title="AI Screening Result" />
+        <Stepper active={4} />
+        <Card style={{ marginTop: 24, textAlign: 'center', padding: '48px 24px' }}>
+          <p style={{ fontSize: 18, color: 'var(--muted)', margin: 0 }}>⏳ Loading screening results…</p>
+        </Card>
+      </>
+    );
+  }
+
+  if (!res) {
+    return (
+      <>
+        <SectionHeader title="AI Screening Result" />
+        <Stepper active={4} />
+        <Card style={{ marginTop: 24, textAlign: 'center', padding: '48px 24px' }}>
+          <h3 style={{ marginBottom: 12 }}>No Screening Result Available</h3>
+          <p style={{ color: 'var(--muted)', marginBottom: 20 }}>
+            {error || 'No screening result found. Please capture images or select an existing screening from history.'}
+          </p>
+          <div style={{ display: 'flex', gap: 12, justifyContent: 'center' }}>
+            <Button variant="secondary" onClick={() => nav('/screening/capture')}>← Go to Capture</Button>
+            <Button variant="primary" onClick={() => nav('/history')}>View History</Button>
+          </div>
+        </Card>
+      </>
+    );
+  }
 
   return (
     <>

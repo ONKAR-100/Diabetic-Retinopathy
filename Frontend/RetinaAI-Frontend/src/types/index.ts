@@ -2,7 +2,7 @@ export type DRGrade = 0 | 1 | 2 | 3 | 4;
 export type ReviewStatus = 'not_required' | 'pending' | 'reviewed';
 export type QualityStatus = 'good' | 'borderline' | 'ungradable';
 export type UserRole = 'health_worker' | 'doctor';
-export type ScreeningStatus = 'uploading' | 'quality_check' | 'analyzing' | 'complete' | 'needs_recapture';
+export type ScreeningStatus = 'uploading' | 'quality_check' | 'analyzing' | 'complete' | 'needs_recapture' | 'failed';
 export type ProgressionStatus = 'baseline' | 'stable' | 'possible_improvement' | 'possible_worsening' | 'indeterminate';
 export type RegistrationStatus = 'success' | 'failed' | 'skipped' | 'no_prev_image';
 

@@ -44,7 +44,11 @@ export default function App() {
                   <Route path="/screening/analyze" element={<AnalyzePage />} />
                   <Route path="/screening/result" element={<ResultPage />} />
                   <Route path="/screening/explain" element={<ExplainPage />} />
-                  <Route path="/screening/review" element={<ReviewPage />} />
+                  <Route path="/screening/review" element={
+                    <ProtectedRoute requireDoctor>
+                      <ReviewPage />
+                    </ProtectedRoute>
+                  } />
                   <Route path="/screening/report" element={<ReportPage />} />
                   <Route path="/review/queue" element={
                     <ProtectedRoute requireDoctor>

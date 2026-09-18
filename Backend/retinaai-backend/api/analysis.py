@@ -1,3 +1,4 @@
+import logging
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session, joinedload
 import cv2
@@ -9,6 +10,8 @@ from schemas.analysis import AnalyzeRequest
 from models_loader.loaders import pipeline_service, quality_service, enhancement_service
 from api.screenings import serialize_review, get_latest_review
 from core.dependencies import get_current_user
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -25,6 +28,12 @@ def assess_quality(id: str, req: AnalyzeRequest, db: Session = Depends(get_db), 
     ).first()
     if not scr:
         raise HTTPException(404, "Screening not found")
+
+    if scr.review_status == "reviewed":
+        raise HTTPException(
+            status_code=409,
+            detail="Cannot assess quality for a screening that has been finalized by clinical review."
+        )
 
     eyes_to_check = []
     if req.eye in ["left", "both"] and scr.left_image_path:
@@ -219,6 +228,13 @@ def analyze_screening(id: str, req: AnalyzeRequest, db: Session = Depends(get_db
     if not scr:
         raise HTTPException(404, "Screening not found")
 
+    # CLIN-02: Reviewed screening immutability guard
+    if scr.review_status == "reviewed":
+        raise HTTPException(
+            status_code=409,
+            detail="Cannot re-analyze a screening that has been finalized by clinical review."
+        )
+
     eyes_to_process = []
     if req.eye in ["left", "both"] and scr.left_image_path:
         eyes_to_process.append("left")
@@ -238,79 +254,95 @@ def analyze_screening(id: str, req: AnalyzeRequest, db: Session = Depends(get_db
     needs_recapture = False
     referable = False
 
-    for eye in eyes_to_process:
-        path = getattr(scr, f"{eye}_image_path")
-        bgr = cv2.imread(path)
-        if bgr is None:
-            continue
+    try:
+        for eye in eyes_to_process:
+            path = getattr(scr, f"{eye}_image_path")
+            bgr = cv2.imread(path)
+            if bgr is None:
+                continue
 
-        res = pipeline_service.run(bgr, eye, str(scr.id), image_path=path)
+            res = pipeline_service.run(bgr, eye, str(scr.id), image_path=path)
 
-        # Map quality back to DB
-        setattr(scr, f"{eye}_quality_status", res["quality"].status)
-        setattr(scr, f"{eye}_quality_scores", res["quality"].scores)
-        setattr(scr, f"{eye}_quality_reason", res["quality"].reason)
+            # Map quality back to DB
+            setattr(scr, f"{eye}_quality_status", res["quality"].status)
+            setattr(scr, f"{eye}_quality_scores", res["quality"].scores)
+            setattr(scr, f"{eye}_quality_reason", res["quality"].reason)
 
-        if res["status"] == "needs_recapture":
-            needs_recapture = True
-            continue
+            if res["status"] == "needs_recapture":
+                needs_recapture = True
+                continue
 
-        setattr(scr, f"{eye}_dr_grade", res["dr"].grade)
-        setattr(scr, f"{eye}_class_probabilities", res["dr"].class_probabilities)
-        setattr(scr, f"{eye}_confidence_raw", res["dr"].confidence_raw)
-        setattr(scr, f"{eye}_confidence_calibrated", res["calibrated_confidence"])
-        setattr(scr, f"{eye}_referable", res["dr"].referable)
-        setattr(scr, f"{eye}_gradcam_path", res["gradcam_url"])
-        setattr(scr, f"{eye}_vessel_overlay_path", res["vessel_overlay_url"])
-        setattr(scr, f"{eye}_vessel_mask_path", res["vessel_mask_url"])
-        setattr(scr, f"{eye}_vessel_density", res.get("vessel_density"))
-        setattr(scr, f"{eye}_od_fovea_overlay_path", res["od_fovea_overlay_url"])
-        setattr(scr, f"{eye}_od_x", res["od_x"])
-        setattr(scr, f"{eye}_od_y", res["od_y"])
-        setattr(scr, f"{eye}_od_confidence", res["od_confidence"])
-        setattr(scr, f"{eye}_fovea_x", res["fovea_x"])
-        setattr(scr, f"{eye}_fovea_y", res["fovea_y"])
-        setattr(scr, f"{eye}_fovea_confidence", res["fovea_confidence"])
-        
-        # Biomarkers (MATLAB integration)
-        setattr(scr, f"{eye}_biomarkers", res.get("biomarkers"))
-        setattr(scr, f"{eye}_avr", res.get("avr"))
-        setattr(scr, f"{eye}_tortuosity", res.get("vessel_tortuosity"))
-        setattr(scr, f"{eye}_fractal_dim", res.get("fractal_dimension"))
+            setattr(scr, f"{eye}_dr_grade", res["dr"].grade)
+            setattr(scr, f"{eye}_class_probabilities", res["dr"].class_probabilities)
+            setattr(scr, f"{eye}_confidence_raw", res["dr"].confidence_raw)
+            setattr(scr, f"{eye}_confidence_calibrated", res["calibrated_confidence"])
+            setattr(scr, f"{eye}_referable", res["dr"].referable)
+            setattr(scr, f"{eye}_gradcam_path", res["gradcam_url"])
+            setattr(scr, f"{eye}_vessel_overlay_path", res["vessel_overlay_url"])
+            setattr(scr, f"{eye}_vessel_mask_path", res["vessel_mask_url"])
+            setattr(scr, f"{eye}_vessel_density", res.get("vessel_density"))
+            setattr(scr, f"{eye}_od_fovea_overlay_path", res["od_fovea_overlay_url"])
+            setattr(scr, f"{eye}_od_x", res["od_x"])
+            setattr(scr, f"{eye}_od_y", res["od_y"])
+            setattr(scr, f"{eye}_od_confidence", res["od_confidence"])
+            setattr(scr, f"{eye}_fovea_x", res["fovea_x"])
+            setattr(scr, f"{eye}_fovea_y", res["fovea_y"])
+            setattr(scr, f"{eye}_fovea_confidence", res["fovea_confidence"])
 
-        # Format lesion result as a JSON dict and store it
-        if res.get("lesion"):
-            les_obj = res["lesion"]
-            les_dict = {
-                "microaneurysm": les_obj.microaneurysm.__dict__,
-                "exudate": les_obj.exudate.__dict__,
-                "hemorrhage": les_obj.hemorrhage.__dict__,
-                "neovascularization": les_obj.neovascularization.__dict__,
-                "overlay_url": res.get("lesion_overlay_url")
-            }
-            setattr(scr, f"{eye}_lesion_result", les_dict)
+            # Biomarkers (MATLAB integration)
+            setattr(scr, f"{eye}_biomarkers", res.get("biomarkers"))
+            setattr(scr, f"{eye}_avr", res.get("avr"))
+            setattr(scr, f"{eye}_tortuosity", res.get("vessel_tortuosity"))
+            setattr(scr, f"{eye}_fractal_dim", res.get("fractal_dimension"))
 
-        if res["dr"].referable:
-            referable = True
+            # Format lesion result as a JSON dict and store it
+            if res.get("lesion"):
+                les_obj = res["lesion"]
+                les_dict = {
+                    "microaneurysm": les_obj.microaneurysm.__dict__,
+                    "exudate": les_obj.exudate.__dict__,
+                    "hemorrhage": les_obj.hemorrhage.__dict__,
+                    "neovascularization": les_obj.neovascularization.__dict__,
+                    "overlay_url": res.get("lesion_overlay_url")
+                }
+                setattr(scr, f"{eye}_lesion_result", les_dict)
 
-        total_time += res["pipeline_time"]
+            if res["dr"].referable:
+                referable = True
 
-    if needs_recapture:
-        scr.status = "needs_recapture"
-    else:
-        scr.status = "complete"
-        scr.overall_referable = referable
-        scr.recommendation = (
-            "Priority referral — Specialist evaluation recommended."
-            if referable
-            else "Routine annual screening recommended."
+            total_time += res["pipeline_time"]
+
+        if needs_recapture:
+            scr.status = "needs_recapture"
+        else:
+            scr.status = "complete"
+            scr.overall_referable = referable
+            scr.recommendation = (
+                "Priority referral — Specialist evaluation recommended."
+                if referable
+                else "Routine annual screening recommended."
+            )
+            scr.review_status = "pending" if referable else "not_required"
+            scr.pipeline_time_seconds = total_time
+            scr.analyzed_at = datetime.utcnow()
+
+        db.commit()
+        db.refresh(scr)
+    except Exception as exc:
+        logger.error(f"Inference pipeline execution failed for screening {scr.id}: {exc}", exc_info=True)
+        # REL-04: Persist failure status and rollback any partial changes
+        try:
+            db.rollback()
+            scr = db.query(Screening).filter(Screening.id == id).first()
+            if scr:
+                scr.status = "failed"
+                db.commit()
+        except Exception as inner_exc:
+            logger.error(f"Failed to persist 'failed' status for screening {id}: {inner_exc}")
+        raise HTTPException(
+            status_code=500,
+            detail="AI analysis pipeline failed during execution. Please check screening images or retry."
         )
-        scr.review_status = "pending" if referable else "not_required"
-        scr.pipeline_time_seconds = total_time
-        scr.analyzed_at = datetime.utcnow()
-
-    db.commit()
-    db.refresh(scr)
 
     # Automatically trigger longitudinal comparison after successful analysis
     if scr.status == "complete":

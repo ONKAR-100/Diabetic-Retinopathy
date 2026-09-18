@@ -2,12 +2,14 @@ import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { SectionHeader, Stepper, Card, Button } from '../components';
 import { useScreening } from '../contexts/ScreeningContext';
+import { useAuth } from '../contexts/AuthContext';
 import { generateReport, fetchReportPdfBlobUrl } from '../services/reports';
 
 type Phase = 'generating' | 'ready' | 'error';
 
 export default function ReportPage() {
   const { screening, reset } = useScreening();
+  const { isDoctor } = useAuth();
   const nav = useNavigate();
   const [phase, setPhase] = useState<Phase>('generating');
   const [pdfUrl, setPdfUrl] = useState<string | null>(null);
@@ -136,7 +138,11 @@ export default function ReportPage() {
 
       {/* Navigation row */}
       <div style={{ display: 'flex', gap: 12, marginTop: 24 }}>
-        <Button variant="secondary" onClick={() => nav('/screening/review')}>← Back to Review</Button>
+        {isDoctor ? (
+          <Button variant="secondary" onClick={() => nav('/screening/review')}>← Back to Review</Button>
+        ) : (
+          <Button variant="secondary" onClick={() => nav('/screening/result')}>← Back to Results</Button>
+        )}
         <Button variant="ghost" onClick={() => nav('/')}>🏠 Dashboard</Button>
       </div>
     </>
