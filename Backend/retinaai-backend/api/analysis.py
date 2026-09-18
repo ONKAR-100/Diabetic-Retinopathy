@@ -131,18 +131,27 @@ def assess_quality(id: str, req: AnalyzeRequest, db: Session = Depends(get_db), 
     }
 
 
+from services.storage_service import storage_service
+
+
 def _build_eye(scr: Screening, eye_prefix: str):
     """Build the per-eye response dict from ORM fields."""
     status = getattr(scr, f"{eye_prefix}_quality_status")
     if not status:
         return None
+
+    lesion_data = getattr(scr, f"{eye_prefix}_lesion_result")
+    if lesion_data and isinstance(lesion_data, dict) and lesion_data.get("overlay_url"):
+        lesion_data = dict(lesion_data)
+        lesion_data["overlay_url"] = storage_service.resolve_asset_url(lesion_data["overlay_url"])
+
     return {
         "quality": {
             "status": status,
             "scores": getattr(scr, f"{eye_prefix}_quality_scores") or {},
             "reason": getattr(scr, f"{eye_prefix}_quality_reason"),
         },
-        "original_image_url": getattr(scr, f"{eye_prefix}_image_path"),
+        "original_image_url": storage_service.resolve_asset_url(getattr(scr, f"{eye_prefix}_image_path")),
         "dr_grade": getattr(scr, f"{eye_prefix}_dr_grade"),
         "dr_grade_name": (
             f"Grade {getattr(scr, f'{eye_prefix}_dr_grade')}"
@@ -153,18 +162,18 @@ def _build_eye(scr: Screening, eye_prefix: str):
         "confidence_raw": getattr(scr, f"{eye_prefix}_confidence_raw"),
         "confidence_calibrated": getattr(scr, f"{eye_prefix}_confidence_calibrated"),
         "referable": getattr(scr, f"{eye_prefix}_referable"),
-        "gradcam_url": getattr(scr, f"{eye_prefix}_gradcam_path"),
-        "vessel_overlay_url": getattr(scr, f"{eye_prefix}_vessel_overlay_path"),
-        "vessel_mask_url": getattr(scr, f"{eye_prefix}_vessel_mask_path"),
+        "gradcam_url": storage_service.resolve_asset_url(getattr(scr, f"{eye_prefix}_gradcam_path")),
+        "vessel_overlay_url": storage_service.resolve_asset_url(getattr(scr, f"{eye_prefix}_vessel_overlay_path")),
+        "vessel_mask_url": storage_service.resolve_asset_url(getattr(scr, f"{eye_prefix}_vessel_mask_path")),
         "vessel_density": getattr(scr, f"{eye_prefix}_vessel_density"),
-        "od_fovea_overlay_url": getattr(scr, f"{eye_prefix}_od_fovea_overlay_path"),
+        "od_fovea_overlay_url": storage_service.resolve_asset_url(getattr(scr, f"{eye_prefix}_od_fovea_overlay_path")),
         "od_x": getattr(scr, f"{eye_prefix}_od_x"),
         "od_y": getattr(scr, f"{eye_prefix}_od_y"),
         "od_confidence": getattr(scr, f"{eye_prefix}_od_confidence"),
         "fovea_x": getattr(scr, f"{eye_prefix}_fovea_x"),
         "fovea_y": getattr(scr, f"{eye_prefix}_fovea_y"),
         "fovea_confidence": getattr(scr, f"{eye_prefix}_fovea_confidence"),
-        "lesion": getattr(scr, f"{eye_prefix}_lesion_result"),
+        "lesion": lesion_data,
         "biomarkers": getattr(scr, f"{eye_prefix}_biomarkers"),
         "avr": getattr(scr, f"{eye_prefix}_avr"),
         "vessel_tortuosity": getattr(scr, f"{eye_prefix}_tortuosity"),

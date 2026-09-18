@@ -8,7 +8,10 @@ from database.db import engine, Base
 from api import auth, patients, screenings, analysis, review, reports, analytics, longitudinal
 
 # Create tables
-Base.metadata.create_all(bind=engine)
+try:
+    Base.metadata.create_all(bind=engine)
+except Exception:
+    pass
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -25,8 +28,48 @@ app.add_middleware(
 )
 
 import os
-os.makedirs("static", exist_ok=True)
-app.mount("/static", StaticFiles(directory="static"), name="static")
+from fastapi import Depends, HTTPException
+from fastapi.responses import FileResponse
+from config import settings
+from database.models import User
+from core.dependencies import get_current_user
+
+# Ensure local storage directory exists
+os.makedirs(settings.STATIC_DIR, exist_ok=True)
+
+@app.get("/api/media/{file_path:path}", tags=["Media"])
+def get_media_file(
+    file_path: str,
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Authenticated media gateway for local clinical images and artifacts.
+    Strictly confines file resolution to settings.STATIC_DIR and prevents traversal.
+    """
+    clean = file_path.replace("\\", "/").lstrip("/")
+    parts = [p for p in clean.split("/") if p and p != "."]
+    if any(p == ".." for p in parts):
+        raise HTTPException(status_code=400, detail="Invalid path traversal sequence")
+
+    static_root = os.path.abspath(settings.STATIC_DIR)
+    target_path = os.path.abspath(os.path.join(static_root, *parts))
+
+    # Strict confinement check
+    if not target_path.startswith(static_root + os.sep) and target_path != static_root:
+        raise HTTPException(status_code=403, detail="Access denied: path outside static directory")
+
+    if not os.path.isfile(target_path):
+        raise HTTPException(status_code=404, detail="Media file not found")
+
+    ext = os.path.splitext(target_path)[-1].lower()
+    media_types = {
+        ".jpg": "image/jpeg",
+        ".jpeg": "image/jpeg",
+        ".png": "image/png",
+        ".pdf": "application/pdf"
+    }
+    media_type = media_types.get(ext, "application/octet-stream")
+    return FileResponse(target_path, media_type=media_type)
 
 # Include all routers
 app.include_router(auth.router, prefix="/api/auth", tags=["Auth"])

@@ -85,7 +85,7 @@ class StorageService:
 
         try:
             self._client = create_client(url, key)
-            self._base_url = f"{url}/storage/v1/object/public"
+            self._base_url = f"{url}/storage/v1/object"
             self._ensure_buckets()
             logger.info("Supabase Storage initialized successfully.")
         except Exception as exc:
@@ -94,21 +94,39 @@ class StorageService:
 
     # ── Bucket setup ─────────────────────────────────────────────────────────
     def _ensure_buckets(self):
-        """Create buckets if they don't exist."""
+        """Create private buckets if they don't exist, or update existing to private."""
         from config import settings
         buckets = [
             settings.STORAGE_BUCKET_UPLOADS,
             settings.STORAGE_BUCKET_RESULTS,
             settings.STORAGE_BUCKET_REPORTS,
         ]
-        existing = {b.name for b in self._client.storage.list_buckets()}
+        try:
+            existing_buckets = self._client.storage.list_buckets()
+            existing_map = {b.name: b for b in existing_buckets}
+        except Exception as exc:
+            logger.warning(f"Could not list buckets: {exc}")
+            existing_map = {}
+
         for bucket in buckets:
-            if bucket not in existing:
+            if bucket not in existing_map:
                 try:
-                    self._client.storage.create_bucket(bucket, options={"public": True})
-                    logger.info(f"Created Supabase bucket: {bucket}")
+                    self._client.storage.create_bucket(bucket, options={"public": False})
+                    logger.info(f"Created private Supabase bucket: {bucket}")
                 except Exception as exc:
-                    logger.warning(f"Could not create bucket {bucket}: {exc}")
+                    logger.warning(f"Could not create private bucket {bucket}: {exc}")
+            else:
+                b = existing_map[bucket]
+                is_public = getattr(b, "public", None)
+                if is_public is True or is_public is None:
+                    try:
+                        try:
+                            self._client.storage.update_bucket(bucket, options={"public": False})
+                        except TypeError:
+                            self._client.storage.update_bucket(bucket, public=False)
+                        logger.info(f"Updated existing Supabase bucket to private: {bucket}")
+                    except Exception as exc:
+                        logger.warning(f"Could not update bucket {bucket} to private: {exc}")
 
     # ── Core upload ──────────────────────────────────────────────────────────
     def upload_bytes(
@@ -119,10 +137,10 @@ class StorageService:
         content_type: str = "application/octet-stream",
     ) -> str:
         """
-        Upload raw bytes to Supabase Storage.
+        Upload raw bytes to private Supabase Storage.
 
         Returns:
-            Public URL of the uploaded file.
+            Short-lived signed URL or local media URL.
         """
         self._init()
 
@@ -136,9 +154,9 @@ class StorageService:
                 file=data,
                 file_options={"content-type": content_type, "upsert": "true"},
             )
-            url = f"{self._base_url}/{bucket}/{path}"
-            logger.debug(f"Uploaded to Supabase: {url}")
-            return url
+            signed_url = self.get_signed_url(bucket, path)
+            logger.debug(f"Uploaded to Supabase private storage: {bucket}/{path}")
+            return signed_url
         except Exception as exc:
             logger.error(f"Supabase upload failed for {bucket}/{path}: {exc}")
             return self._local_fallback_bytes(data, path)
@@ -183,23 +201,143 @@ class StorageService:
         content_type = "image/jpeg" if ext in (".jpg", ".jpeg") else "image/png"
         return self.upload_bytes(data, bucket, storage_path, content_type)
 
-    def get_public_url(self, bucket: str, path: str) -> str:
-        """Return the public URL for an already-uploaded file."""
+    def get_signed_url(self, bucket: str, path: str, expires_in: int = 900) -> str:
+        """
+        Generate a short-lived signed URL for an object in a private Supabase bucket.
+        Default expiry: 900 seconds (15 minutes).
+        Falls back to authenticated /api/media/... path if Supabase is unavailable.
+        """
         self._init()
-        return f"{self._base_url}/{bucket}/{path}"
+        if self._client is not None:
+            try:
+                res = self._client.storage.from_(bucket).create_signed_url(path, expires_in)
+                if isinstance(res, dict):
+                    signed = res.get("signedURL") or res.get("signedUrl") or res.get("url")
+                    if signed:
+                        return signed
+                elif isinstance(res, str):
+                    return res
+            except Exception as exc:
+                logger.error(f"Failed to create signed URL for {bucket}/{path}: {exc}")
+
+        # Local fallback
+        clean = path.replace("\\", "/").lstrip("/")
+        return f"/api/media/{clean}"
+
+    def get_public_url(self, bucket: str, path: str) -> str:
+        """
+        Deprecated for clinical assets. Returns a short-lived signed URL instead
+        to eliminate permanent public clinical URL exposure.
+        """
+        return self.get_signed_url(bucket, path)
+
+    def download_bytes(self, bucket: str, path: str) -> bytes:
+        """
+        Download raw object bytes from private Supabase Storage or local disk.
+        Used for internal operations (e.g. PDF report compilation).
+        """
+        self._init()
+        if self._client is not None:
+            try:
+                data = self._client.storage.from_(bucket).download(path)
+                return data
+            except Exception as exc:
+                logger.error(f"Supabase download failed for {bucket}/{path}: {exc}")
+
+        # Local fallback
+        local_path = self.get_local_path(path)
+        if not local_path or not os.path.exists(local_path):
+            candidate = os.path.join(settings.STATIC_DIR, path.replace("\\", "/").lstrip("/"))
+            if os.path.exists(candidate):
+                local_path = candidate
+
+        if local_path and os.path.exists(local_path):
+            with open(local_path, "rb") as f:
+                return f.read()
+
+        raise FileNotFoundError(f"Clinical asset not found: {bucket}/{path}")
+
+    def download_bytes_from_url(self, url: str) -> bytes:
+        """
+        Download raw object bytes given a full or partial URL/path.
+        Extracts bucket and object key for Supabase URLs or reads local disk.
+        """
+        if not url:
+            raise ValueError("URL cannot be empty")
+
+        clean = url.replace("\\", "/").strip()
+        for bucket in [settings.STORAGE_BUCKET_UPLOADS, settings.STORAGE_BUCKET_RESULTS, settings.STORAGE_BUCKET_REPORTS]:
+            for marker in [f"/storage/v1/object/public/{bucket}/", f"/storage/v1/object/sign/{bucket}/"]:
+                if marker in clean:
+                    obj_path = clean.split(marker, 1)[1].split("?")[0]
+                    return self.download_bytes(bucket, obj_path)
+
+        local_path = self.get_local_path(clean)
+        if local_path and os.path.exists(local_path):
+            with open(local_path, "rb") as f:
+                return f.read()
+
+        raise FileNotFoundError(f"Could not resolve asset for download: {url}")
+
+    def resolve_asset_url(self, url_or_path: Optional[str], expires_in: int = 900) -> Optional[str]:
+        """
+        Backward-compatible URL and reference resolver.
+        - Resolves historical Supabase public URLs to short-lived signed URLs.
+        - Converts local /static/... or relative paths to authenticated /api/media/...
+        - Preserves existing signed URLs or clean /api/media/... URLs.
+        """
+        if not url_or_path:
+            return None
+
+        clean = url_or_path.replace("\\", "/").strip()
+        if not clean:
+            return None
+
+        # 1. Supabase URLs
+        if clean.startswith("http://") or clean.startswith("https://"):
+            for bucket in [settings.STORAGE_BUCKET_UPLOADS, settings.STORAGE_BUCKET_RESULTS, settings.STORAGE_BUCKET_REPORTS]:
+                marker_public = f"/storage/v1/object/public/{bucket}/"
+                marker_sign = f"/storage/v1/object/sign/{bucket}/"
+                if marker_public in clean:
+                    obj_path = clean.split(marker_public, 1)[1].split("?")[0]
+                    return self.get_signed_url(bucket, obj_path, expires_in)
+                if marker_sign in clean:
+                    return clean
+            return clean
+
+        # 2. Local media paths
+        if clean.startswith("/api/media/"):
+            return clean
+
+        if clean.startswith("/static/"):
+            rel = clean[len("/static/"):]
+            return f"/api/media/{rel}"
+        if clean.startswith("static/"):
+            rel = clean[len("static/"):]
+            return f"/api/media/{rel}"
+
+        # Relative path inside STATIC_DIR (e.g. uploads/... or results/...)
+        return f"/api/media/{clean.lstrip('/')}"
 
     # ── Local filesystem resolution ──────────────────────────────────────────
     def get_local_path(self, url_or_path: str) -> Optional[str]:
         """
-        Convert a local /static/... URL or relative storage path into an absolute
-        filesystem path on the host system. Returns None if url_or_path is an
+        Convert a local /static/... or /api/media/... URL or relative storage path into
+        an absolute filesystem path on the host system. Returns None if url_or_path is an
         external HTTP(S) URL or empty.
         """
         if not url_or_path or url_or_path.startswith("http://") or url_or_path.startswith("https://"):
             return None
 
+        if os.path.isabs(url_or_path) and os.path.exists(url_or_path):
+            return os.path.abspath(url_or_path)
+
         clean = url_or_path.replace("\\", "/")
-        if clean.startswith("/static/"):
+        if clean.startswith("/api/media/"):
+            rel_path = clean[len("/api/media/"):]
+        elif clean.startswith("api/media/"):
+            rel_path = clean[len("api/media/"):]
+        elif clean.startswith("/static/"):
             rel_path = clean[len("/static/"):]
         elif clean.startswith("static/"):
             rel_path = clean[len("static/"):]
@@ -222,15 +360,14 @@ class StorageService:
 
     # ── Local fallback ───────────────────────────────────────────────────────
     def _local_fallback_bytes(self, data: bytes, path: str) -> str:
-        """Save bytes to local static/ dir and return a /static/... URL."""
+        """Save bytes to local static/ dir and return an authenticated /api/media/... URL."""
         clean_path = path.replace("\\", "/").lstrip("/")
         local_path = os.path.join(settings.STATIC_DIR, *clean_path.split("/"))
         os.makedirs(os.path.dirname(local_path), exist_ok=True)
         with open(local_path, "wb") as f:
             f.write(data)
-        return f"/static/{clean_path}"
+        return f"/api/media/{clean_path}"
 
 
 # Singleton instance — import this everywhere
 storage_service = StorageService()
-

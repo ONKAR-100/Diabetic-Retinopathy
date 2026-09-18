@@ -81,23 +81,44 @@ def ensure_pdf(screening_id: str, db: Session, force: bool = False):
 
 @router.get("/{screening_id}")
 def view_report_pdf(screening_id: str, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    """Redirect the browser directly to the Supabase Storage public URL or serve from local disk."""
-    _, _, pdf_url = ensure_pdf(screening_id, db)
+    """Return the PDF report bytes directly using StreamingResponse or FileResponse."""
+    scr, rep, pdf_url = ensure_pdf(screening_id, db)
 
-    # If it's a full HTTP URL (Supabase), redirect to it
-    if pdf_url.startswith("http"):
-        return RedirectResponse(url=pdf_url, status_code=302)
+    filename = f"RetinaAI_Report_{scr.screening_display_id or screening_id}.pdf"
+    headers = {"Content-Disposition": f"inline; filename={filename}"}
 
-    # Fallback: serve from local disk
-    local_path = storage_service.get_local_path(pdf_url)
+    # 1. If it's a remote/Supabase URL, download and stream directly
+    if pdf_url.startswith("http://") or pdf_url.startswith("https://"):
+        storage_path = f"{scr.screening_display_id}/report.pdf"
+        try:
+            pdf_bytes = storage_service.download_bytes(settings.STORAGE_BUCKET_REPORTS, storage_path)
+            return StreamingResponse(
+                io.BytesIO(pdf_bytes),
+                media_type="application/pdf",
+                headers=headers
+            )
+        except Exception:
+            pass
+
+    # 2. Local file resolution
+    if os.path.isabs(pdf_url) and os.path.exists(pdf_url):
+        local_path = pdf_url
+    else:
+        local_path = storage_service.get_local_path(pdf_url)
+    if not local_path or not os.path.exists(local_path):
+        candidate = os.path.join(settings.STATIC_DIR, scr.screening_display_id, "report.pdf")
+        if os.path.exists(candidate):
+            local_path = candidate
+
     if local_path and os.path.exists(local_path):
         from fastapi.responses import FileResponse
         return FileResponse(
             local_path,
             media_type="application/pdf",
-            filename=f"RetinaAI_Report_{screening_id}.pdf",
-            headers={"Content-Disposition": f"inline; filename=RetinaAI_Report_{screening_id}.pdf"},
+            filename=filename,
+            headers=headers
         )
+
     raise HTTPException(404, "Report file not found")
 
 
@@ -109,6 +130,6 @@ def generate_report_endpoint(screening_id: str, db: Session = Depends(get_db), c
     return ReportResponse(
         report_id=rep.id,
         screening_id=scr.screening_display_id,
-        pdf_url=pdf_url,
+        pdf_url=storage_service.resolve_asset_url(pdf_url),
         generated_at=rep.generated_at,
     )

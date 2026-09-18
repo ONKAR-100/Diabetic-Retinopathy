@@ -12,7 +12,7 @@ import { getPatient } from '../services/patients';
 import { getPatientTimeline, getScreening } from '../services/screenings';
 import { useScreening } from '../contexts/ScreeningContext';
 import { ProgressionStatus, TimelineItem } from '../types';
-import { BACKEND_URL } from '../services/api';
+import { BACKEND_URL, apiClient } from '../services/api';
 
 const BACKEND = BACKEND_URL;
 const pathToUrl = (path: string | null | undefined, fallback = '/retina.svg'): string => {
@@ -21,11 +21,85 @@ const pathToUrl = (path: string | null | undefined, fallback = '/retina.svg'): s
   const normalized = path.replace(/\\/g, '/');
   const staticIdx = normalized.indexOf('static/');
   if (staticIdx !== -1) {
-    return `${BACKEND}/${normalized.slice(staticIdx)}`;
+    return `${BACKEND}/api/media/${normalized.slice(staticIdx + 7)}`;
+  }
+  if (normalized.startsWith('/api/media/')) {
+    return `${BACKEND}${normalized}`;
+  }
+  if (normalized.startsWith('api/media/')) {
+    return `${BACKEND}/${normalized}`;
   }
   const clean = normalized.startsWith('/') ? normalized : `/${normalized}`;
-  return `${BACKEND}${clean}`;
+  return `${BACKEND}/api/media${clean}`;
 };
+
+function AuthenticatedImg({
+  src,
+  alt,
+  fallback = '/retina.svg',
+  style,
+  className,
+  onError,
+  ...props
+}: React.ImgHTMLAttributes<HTMLImageElement> & { fallback?: string }) {
+  const [blobUrl, setBlobUrl] = useState<string | null>(null);
+  const [hasError, setHasError] = useState(false);
+
+  useEffect(() => {
+    setHasError(false);
+    if (!src || src === fallback || src.startsWith('data:') || src.startsWith('blob:')) {
+      setBlobUrl(null);
+      return;
+    }
+
+    if ((src.startsWith('http://') || src.startsWith('https://')) && !src.includes('/api/media/')) {
+      setBlobUrl(null);
+      return;
+    }
+
+    let active = true;
+    let objectUrl: string | null = null;
+
+    apiClient.get(src, { responseType: 'blob' })
+      .then(res => {
+        if (!active) return;
+        objectUrl = URL.createObjectURL(new Blob([res.data]));
+        setBlobUrl(objectUrl);
+      })
+      .catch(err => {
+        if (!active) return;
+        console.error('Failed to load protected media:', err);
+        setHasError(true);
+      });
+
+    return () => {
+      active = false;
+      if (objectUrl) {
+        URL.revokeObjectURL(objectUrl);
+      }
+    };
+  }, [src, fallback]);
+
+  const effectiveSrc = hasError
+    ? fallback
+    : blobUrl
+    ? blobUrl
+    : (src || fallback);
+
+  return (
+    <img
+      src={effectiveSrc}
+      alt={alt}
+      style={style}
+      className={className}
+      onError={(e) => {
+        setHasError(true);
+        if (onError) onError(e);
+      }}
+      {...props}
+    />
+  );
+}
 
 const GRADE_MAP: Record<number, { name: string; short: string; color: string; bg: string; border: string }> = {
   0: { name: 'No Diabetic Retinopathy', short: 'No DR', color: '#059669', bg: '#d1fae5', border: '#a7f3d0' },
@@ -871,11 +945,10 @@ export default function PatientLongitudinalHistoryPage() {
                     </div>
 
                     <div style={{ position: 'relative', width: '100%', height: 230, borderRadius: 10, overflow: 'hidden', background: '#0a1d1f', border: '1px solid #1f2e30' }}>
-                      <img
+                      <AuthenticatedImg
                         src={prevImgUrl}
                         alt="Previous Retinal Fundus"
                         style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
-                        onError={(e: any) => { e.currentTarget.src = '/retina.svg'; }}
                       />
                       <span style={{ position: 'absolute', bottom: 8, left: 8, background: 'rgba(9,34,36,0.82)', color: '#d8f3ef', padding: '3px 7px', borderRadius: 6, fontSize: 10, fontWeight: 700, fontFamily: 'var(--font-mono)' }}>
                         Retinal Fundus
@@ -919,11 +992,10 @@ export default function PatientLongitudinalHistoryPage() {
                     </div>
 
                     <div style={{ position: 'relative', width: '100%', height: 230, borderRadius: 10, overflow: 'hidden', background: '#0a1d1f', border: '1px solid #1f2e30' }}>
-                      <img
+                      <AuthenticatedImg
                         src={currImgUrl}
                         alt="Current Retinal Fundus"
                         style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
-                        onError={(e: any) => { e.currentTarget.src = '/retina.svg'; }}
                       />
                       <span style={{ position: 'absolute', bottom: 8, left: 8, background: 'rgba(9,34,36,0.82)', color: '#d8f3ef', padding: '3px 7px', borderRadius: 6, fontSize: 10, fontWeight: 700, fontFamily: 'var(--font-mono)' }}>
                         Retinal Fundus
@@ -1091,7 +1163,7 @@ export default function PatientLongitudinalHistoryPage() {
                           <div style={{ fontSize: 11, color: '#688285', marginBottom: 6, fontWeight: 600 }}>Previous Lesion Overlay</div>
                           <div style={{ position: 'relative', width: '100%', height: 210, borderRadius: 10, overflow: 'hidden', background: '#0a1d1f', border: '1px solid #1f2e30' }}>
                             {prevOverlay ? (
-                              <img src={pathToUrl(prevOverlay)} alt="Previous Lesions" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                              <AuthenticatedImg src={pathToUrl(prevOverlay)} alt="Previous Lesions" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                             ) : (
                               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: '#8fa5a7', fontSize: 12 }}>
                                 Not available for this examination
@@ -1104,7 +1176,7 @@ export default function PatientLongitudinalHistoryPage() {
                           <div style={{ fontSize: 11, color: '#688285', marginBottom: 6, fontWeight: 600 }}>Current Lesion Overlay</div>
                           <div style={{ position: 'relative', width: '100%', height: 210, borderRadius: 10, overflow: 'hidden', background: '#0a1d1f', border: '1px solid #1f2e30' }}>
                             {currOverlay ? (
-                              <img src={pathToUrl(currOverlay)} alt="Current Lesions" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                              <AuthenticatedImg src={pathToUrl(currOverlay)} alt="Current Lesions" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                             ) : (
                               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: '#8fa5a7', fontSize: 12 }}>
                                 Not available for this examination
@@ -1229,7 +1301,7 @@ export default function PatientLongitudinalHistoryPage() {
                           <div style={{ fontSize: 11, color: '#688285', marginBottom: 6, fontWeight: 600 }}>Previous Vessel Mask / Overlay</div>
                           <div style={{ position: 'relative', width: '100%', height: 210, borderRadius: 10, overflow: 'hidden', background: '#0a1d1f', border: '1px solid #1f2e30' }}>
                             {prevVessel ? (
-                              <img src={pathToUrl(prevVessel)} alt="Previous Vessel Mask" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                              <AuthenticatedImg src={pathToUrl(prevVessel)} alt="Previous Vessel Mask" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                             ) : (
                               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: '#8fa5a7', fontSize: 12 }}>
                                 Not available for this examination
@@ -1242,7 +1314,7 @@ export default function PatientLongitudinalHistoryPage() {
                           <div style={{ fontSize: 11, color: '#688285', marginBottom: 6, fontWeight: 600 }}>Current Vessel Mask / Overlay</div>
                           <div style={{ position: 'relative', width: '100%', height: 210, borderRadius: 10, overflow: 'hidden', background: '#0a1d1f', border: '1px solid #1f2e30' }}>
                             {currVessel ? (
-                              <img src={pathToUrl(currVessel)} alt="Current Vessel Mask" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                              <AuthenticatedImg src={pathToUrl(currVessel)} alt="Current Vessel Mask" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                             ) : (
                               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: '#8fa5a7', fontSize: 12 }}>
                                 Not available for this examination
@@ -1358,7 +1430,7 @@ export default function PatientLongitudinalHistoryPage() {
                           <div style={{ fontSize: 11, color: '#688285', marginBottom: 6, fontWeight: 600 }}>Previous Fovea Marker</div>
                           <div style={{ position: 'relative', width: '100%', height: 210, borderRadius: 10, overflow: 'hidden', background: '#0a1d1f', border: '1px solid #1f2e30' }}>
                             {prevOdf ? (
-                              <img src={pathToUrl(prevOdf)} alt="Previous Fovea Marker" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                              <AuthenticatedImg src={pathToUrl(prevOdf)} alt="Previous Fovea Marker" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                             ) : (
                               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: '#8fa5a7', fontSize: 12 }}>
                                 Not available for this examination
@@ -1371,7 +1443,7 @@ export default function PatientLongitudinalHistoryPage() {
                           <div style={{ fontSize: 11, color: '#688285', marginBottom: 6, fontWeight: 600 }}>Current Fovea Marker</div>
                           <div style={{ position: 'relative', width: '100%', height: 210, borderRadius: 10, overflow: 'hidden', background: '#0a1d1f', border: '1px solid #1f2e30' }}>
                             {currOdf ? (
-                              <img src={pathToUrl(currOdf)} alt="Current Fovea Marker" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                              <AuthenticatedImg src={pathToUrl(currOdf)} alt="Current Fovea Marker" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                             ) : (
                               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: '#8fa5a7', fontSize: 12 }}>
                                 Not available for this examination
@@ -1421,7 +1493,7 @@ export default function PatientLongitudinalHistoryPage() {
                           <div style={{ fontSize: 11, color: '#688285', marginBottom: 6, fontWeight: 600 }}>Previous Model Attention</div>
                           <div style={{ position: 'relative', width: '100%', height: 210, borderRadius: 10, overflow: 'hidden', background: '#0a1d1f', border: '1px solid #1f2e30' }}>
                             {prevCam ? (
-                              <img src={pathToUrl(prevCam)} alt="Previous Grad-CAM" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                              <AuthenticatedImg src={pathToUrl(prevCam)} alt="Previous Grad-CAM" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                             ) : (
                               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: '#8fa5a7', fontSize: 12 }}>
                                 Not available for this examination
@@ -1434,7 +1506,7 @@ export default function PatientLongitudinalHistoryPage() {
                           <div style={{ fontSize: 11, color: '#688285', marginBottom: 6, fontWeight: 600 }}>Current Model Attention</div>
                           <div style={{ position: 'relative', width: '100%', height: 210, borderRadius: 10, overflow: 'hidden', background: '#0a1d1f', border: '1px solid #1f2e30' }}>
                             {currCam ? (
-                              <img src={pathToUrl(currCam)} alt="Current Grad-CAM" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                              <AuthenticatedImg src={pathToUrl(currCam)} alt="Current Grad-CAM" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                             ) : (
                               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: '#8fa5a7', fontSize: 12 }}>
                                 Not available for this examination

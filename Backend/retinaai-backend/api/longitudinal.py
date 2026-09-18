@@ -12,6 +12,7 @@ from database.db import get_db
 from database.models import Screening, Patient, LongitudinalComparison, User
 from core.dependencies import get_current_user
 from services.longitudinal_service import run_longitudinal_comparison
+from services.storage_service import storage_service
 
 router = APIRouter()
 
@@ -28,10 +29,10 @@ def _serialize_comparison(comp: LongitudinalComparison) -> dict:
         # Registration
         "left_registration_status": comp.left_registration_status,
         "left_registration_quality": comp.left_registration_quality,
-        "left_diff_overlay_url": comp.left_diff_overlay_path,
+        "left_diff_overlay_url": storage_service.resolve_asset_url(comp.left_diff_overlay_path),
         "right_registration_status": comp.right_registration_status,
         "right_registration_quality": comp.right_registration_quality,
-        "right_diff_overlay_url": comp.right_diff_overlay_path,
+        "right_diff_overlay_url": storage_service.resolve_asset_url(comp.right_diff_overlay_path),
         # DR Grades
         "left_grade_prev": comp.left_grade_prev,
         "left_grade_curr": comp.left_grade_curr,

@@ -3,8 +3,95 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft, TrendingUp, TrendingDown, Minus, AlertTriangle, CheckCircle2, Info, Eye, Activity, Layers } from 'lucide-react';
 import { getComparison, triggerComparison } from '../services/screenings';
 import { LongitudinalComparison, ProgressionStatus } from '../types';
+import { BACKEND_URL, apiClient } from '../services/api';
 
-const API_BASE = 'http://127.0.0.1:8000';
+const API_BASE = BACKEND_URL;
+
+const imgBase = (url?: string | null): string => {
+  if (!url) return '/retina.svg';
+  if (url.startsWith('http://') || url.startsWith('https://') || url.startsWith('blob:')) return url;
+  const normalized = url.replace(/\\/g, '/');
+  const staticIdx = normalized.indexOf('static/');
+  if (staticIdx !== -1) {
+    return `${BACKEND_URL}/api/media/${normalized.slice(staticIdx + 7)}`;
+  }
+  if (normalized.startsWith('/api/media/')) {
+    return `${BACKEND_URL}${normalized}`;
+  }
+  if (normalized.startsWith('api/media/')) {
+    return `${BACKEND_URL}/${normalized}`;
+  }
+  const clean = normalized.startsWith('/') ? normalized : `/${normalized}`;
+  return `${BACKEND_URL}/api/media${clean}`;
+};
+
+function AuthenticatedImg({
+  src,
+  alt,
+  fallback = '/retina.svg',
+  style,
+  className,
+  onError,
+  ...props
+}: React.ImgHTMLAttributes<HTMLImageElement> & { fallback?: string }) {
+  const [blobUrl, setBlobUrl] = useState<string | null>(null);
+  const [hasError, setHasError] = useState(false);
+
+  useEffect(() => {
+    setHasError(false);
+    if (!src || src === fallback || src.startsWith('data:') || src.startsWith('blob:')) {
+      setBlobUrl(null);
+      return;
+    }
+
+    if ((src.startsWith('http://') || src.startsWith('https://')) && !src.includes('/api/media/')) {
+      setBlobUrl(null);
+      return;
+    }
+
+    let active = true;
+    let objectUrl: string | null = null;
+
+    apiClient.get(src, { responseType: 'blob' })
+      .then(res => {
+        if (!active) return;
+        objectUrl = URL.createObjectURL(new Blob([res.data]));
+        setBlobUrl(objectUrl);
+      })
+      .catch(err => {
+        if (!active) return;
+        console.error('Failed to load protected media:', err);
+        setHasError(true);
+      });
+
+    return () => {
+      active = false;
+      if (objectUrl) {
+        URL.revokeObjectURL(objectUrl);
+      }
+    };
+  }, [src, fallback]);
+
+  const effectiveSrc = hasError
+    ? fallback
+    : blobUrl
+    ? blobUrl
+    : (src || fallback);
+
+  return (
+    <img
+      src={effectiveSrc}
+      alt={alt}
+      style={style}
+      className={className}
+      onError={(e) => {
+        setHasError(true);
+        if (onError) onError(e);
+      }}
+      {...props}
+    />
+  );
+}
 
 const GRADE_NAMES: Record<number, string> = {
   0: 'No DR',
@@ -97,7 +184,6 @@ function ImageComparePanel({ prevUrl, currUrl, prevLabel, currLabel, title }: {
   prevUrl?: string | null; currUrl?: string | null; prevLabel: string; currLabel: string; title: string;
 }) {
   if (!prevUrl && !currUrl) return null;
-  const imgBase = (url: string) => url.startsWith('/') ? `${API_BASE}${url}` : url;
   return (
     <div style={{ marginBottom: 20 }}>
       <div style={{ fontSize: 12, fontWeight: 700, color: '#0e6264', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 10 }}>{title}</div>
@@ -106,7 +192,7 @@ function ImageComparePanel({ prevUrl, currUrl, prevLabel, currLabel, title }: {
           <div>
             <div style={{ fontSize: 10, color: '#6b7280', marginBottom: 4 }}>{prevLabel}</div>
             <div style={{ borderRadius: 10, overflow: 'hidden', background: '#0d1e20', border: '1px solid #1f2e30' }}>
-              <img src={imgBase(prevUrl)} alt="Previous" style={{ width: '100%', height: 'auto', display: 'block' }} />
+              <AuthenticatedImg src={imgBase(prevUrl)} alt="Previous" style={{ width: '100%', height: 'auto', display: 'block' }} />
             </div>
           </div>
         ) : (
@@ -118,7 +204,7 @@ function ImageComparePanel({ prevUrl, currUrl, prevLabel, currLabel, title }: {
           <div>
             <div style={{ fontSize: 10, color: '#6b7280', marginBottom: 4 }}>{currLabel}</div>
             <div style={{ borderRadius: 10, overflow: 'hidden', background: '#0d1e20', border: '1px solid #1f2e30' }}>
-              <img src={imgBase(currUrl)} alt="Current" style={{ width: '100%', height: 'auto', display: 'block' }} />
+              <AuthenticatedImg src={imgBase(currUrl)} alt="Current" style={{ width: '100%', height: 'auto', display: 'block' }} />
             </div>
           </div>
         ) : (
@@ -226,7 +312,7 @@ function EyeComparisonSection({
             Colour intensity indicates regions of change between aligned images. Blue = low change; Red/yellow = higher change. Not a clinical lesion map.
           </div>
           <div style={{ borderRadius: 10, overflow: 'hidden', border: '1px solid #1f2e30', background: '#0d1e20' }}>
-            <img src={`${API_BASE}${diffUrl}`} alt="Difference overlay" style={{ width: '100%', display: 'block' }} />
+            <AuthenticatedImg src={imgBase(diffUrl)} alt="Difference overlay" style={{ width: '100%', display: 'block' }} />
           </div>
         </div>
       )}

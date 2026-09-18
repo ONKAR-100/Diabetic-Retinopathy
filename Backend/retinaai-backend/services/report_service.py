@@ -83,9 +83,10 @@ _BACKEND_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 
 def safe_img(path: Optional[str], width_cm: float, height_cm: float) -> Optional[RLImage]:
-    """Load an image from either a Supabase https:// URL or a local path into a ReportLab Image.
+    """Load an image from either a Supabase private/public URL or a local path into a ReportLab Image.
     Handles:
-      - Supabase public URLs   (https://...supabase.co/storage/v1/object/public/...)
+      - Supabase private/signed/public URLs via backend storage client
+      - /api/media/... authenticated media routes
       - Absolute Windows paths  (D:\\...\\static\\results\\...)
       - /static/results/...     (strip leading slash, resolve against backend root)
       - static/results/...      (relative, resolve against backend root)
@@ -96,6 +97,15 @@ def safe_img(path: Optional[str], width_cm: float, height_cm: float) -> Optional
     # ── Supabase / remote URL ─────────────────────────────────────────────────
     if path.startswith("http://") or path.startswith("https://"):
         try:
+            # 1. Try to download directly via storage_service using backend credentials
+            from services.storage_service import storage_service
+            try:
+                img_data = storage_service.download_bytes_from_url(path)
+                return RLImage(io.BytesIO(img_data), width=width_cm * cm, height=height_cm * cm)
+            except Exception:
+                pass
+
+            # 2. Fallback: urllib request if it is an accessible signed URL
             import urllib.request
             with urllib.request.urlopen(path, timeout=10) as resp:
                 img_data = resp.read()
@@ -108,6 +118,14 @@ def safe_img(path: Optional[str], width_cm: float, height_cm: float) -> Optional
     # ── Local path ────────────────────────────────────────────────────────────
     # Normalize backslashes to forward slashes
     path = path.replace("\\", "/")
+
+    # If path contains /api/media/, map to static/
+    if "/api/media/" in path:
+        path = "static/" + path.split("/api/media/")[1]
+    elif path.startswith("/api/media/"):
+        path = "static/" + path[len("/api/media/"):]
+    elif path.startswith("api/media/"):
+        path = "static/" + path[len("api/media/"):]
 
     # If path contains "static/" somewhere in the middle (absolute path), extract from there
     idx = path.find("static/")
@@ -123,6 +141,17 @@ def safe_img(path: Optional[str], width_cm: float, height_cm: float) -> Optional
         abs_path = os.path.join(_BACKEND_ROOT, path)
     else:
         abs_path = path
+
+    if not os.path.exists(abs_path):
+        # Also check relative to config settings.STATIC_DIR
+        try:
+            from config import settings
+            sub = path[len("static/"):] if path.startswith("static/") else path
+            cand = os.path.join(settings.STATIC_DIR, sub)
+            if os.path.exists(cand):
+                abs_path = cand
+        except Exception:
+            pass
 
     if not os.path.exists(abs_path):
         return None

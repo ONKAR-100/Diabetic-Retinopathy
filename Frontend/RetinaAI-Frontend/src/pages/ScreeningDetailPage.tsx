@@ -14,7 +14,7 @@ import { getScreening } from '../services/screenings';
 import { submitReview } from '../services/review';
 import { useScreening } from '../contexts/ScreeningContext';
 import { useAuth } from '../contexts/AuthContext';
-import { BACKEND_URL } from '../services/api';
+import { BACKEND_URL, apiClient } from '../services/api';
 
 // Robust URL resolver for model outputs
 const BACKEND = BACKEND_URL;
@@ -24,11 +24,85 @@ const pathToUrl = (path: string | null | undefined, fallback = '/retina.svg'): s
   const normalized = path.replace(/\\/g, '/');
   const staticIdx = normalized.indexOf('static/');
   if (staticIdx !== -1) {
-    return `${BACKEND}/${normalized.slice(staticIdx)}`;
+    return `${BACKEND}/api/media/${normalized.slice(staticIdx + 7)}`;
+  }
+  if (normalized.startsWith('/api/media/')) {
+    return `${BACKEND}${normalized}`;
+  }
+  if (normalized.startsWith('api/media/')) {
+    return `${BACKEND}/${normalized}`;
   }
   const clean = normalized.startsWith('/') ? normalized : `/${normalized}`;
-  return `${BACKEND}${clean}`;
+  return `${BACKEND}/api/media${clean}`;
 };
+
+function AuthenticatedImg({
+  src,
+  alt,
+  fallback = '/retina.svg',
+  style,
+  className,
+  onError,
+  ...props
+}: React.ImgHTMLAttributes<HTMLImageElement> & { fallback?: string }) {
+  const [blobUrl, setBlobUrl] = useState<string | null>(null);
+  const [hasError, setHasError] = useState(false);
+
+  useEffect(() => {
+    setHasError(false);
+    if (!src || src === fallback || src.startsWith('data:') || src.startsWith('blob:')) {
+      setBlobUrl(null);
+      return;
+    }
+
+    if ((src.startsWith('http://') || src.startsWith('https://')) && !src.includes('/api/media/')) {
+      setBlobUrl(null);
+      return;
+    }
+
+    let active = true;
+    let objectUrl: string | null = null;
+
+    apiClient.get(src, { responseType: 'blob' })
+      .then(res => {
+        if (!active) return;
+        objectUrl = URL.createObjectURL(new Blob([res.data]));
+        setBlobUrl(objectUrl);
+      })
+      .catch(err => {
+        if (!active) return;
+        console.error('Failed to load protected media:', err);
+        setHasError(true);
+      });
+
+    return () => {
+      active = false;
+      if (objectUrl) {
+        URL.revokeObjectURL(objectUrl);
+      }
+    };
+  }, [src, fallback]);
+
+  const effectiveSrc = hasError
+    ? fallback
+    : blobUrl
+    ? blobUrl
+    : (src || fallback);
+
+  return (
+    <img
+      src={effectiveSrc}
+      alt={alt}
+      style={style}
+      className={className}
+      onError={(e) => {
+        setHasError(true);
+        if (onError) onError(e);
+      }}
+      {...props}
+    />
+  );
+}
 
 const getGradeName = (grade: number | undefined | null, name: string | undefined | null): string => {
   if (name && !name.toLowerCase().startsWith('grade')) return name;
@@ -619,7 +693,7 @@ export default function ScreeningDetailPage() {
                   {/* Left Column: Fixed crisp retinal fundus frame (capped at 420px) */}
                   <div style={{ flex: '0 0 420px', maxWidth: '100%', minWidth: 320 }}>
                     <div className="history-fundus-frame" style={{ width: '100%', maxWidth: 420, aspectRatio: '4 / 3' }}>
-                      <img src={getEyeImage('left', leftLayer)} alt="Left eye retinal capture" />
+                      <AuthenticatedImg src={getEyeImage('left', leftLayer)} alt="Left eye retinal capture" />
                       <span className="history-fundus-badge">OS · 45° Posterior Pole</span>
                       <span className="history-fundus-layer-tag">
                         {leftLayer === 'lesions' ? 'Lesion Model' : leftLayer.replace('_', ' ')}
@@ -727,7 +801,7 @@ export default function ScreeningDetailPage() {
                 </div>
 
                 <div className="history-fundus-frame">
-                  <img src={getEyeImage('left', leftLayer)} alt="Left eye retinal capture" />
+                  <AuthenticatedImg src={getEyeImage('left', leftLayer)} alt="Left eye retinal capture" />
                   <span className="history-fundus-badge">OS · 45° Posterior Pole</span>
                   <span className="history-fundus-layer-tag">
                     {leftLayer === 'lesions' ? 'Lesion Model' : leftLayer.replace('_', ' ')}
@@ -827,7 +901,7 @@ export default function ScreeningDetailPage() {
                   {/* Left Column: Fixed crisp retinal fundus frame (capped at 420px) */}
                   <div style={{ flex: '0 0 420px', maxWidth: '100%', minWidth: 320 }}>
                     <div className="history-fundus-frame" style={{ width: '100%', maxWidth: 420, aspectRatio: '4 / 3' }}>
-                      <img src={getEyeImage('right', rightLayer)} alt="Right eye retinal capture" />
+                      <AuthenticatedImg src={getEyeImage('right', rightLayer)} alt="Right eye retinal capture" />
                       <span className="history-fundus-badge">OD · 45° Posterior Pole</span>
                       <span className="history-fundus-layer-tag">
                         {rightLayer === 'lesions' ? 'Lesion Model' : rightLayer.replace('_', ' ')}
@@ -935,7 +1009,7 @@ export default function ScreeningDetailPage() {
                 </div>
 
                 <div className="history-fundus-frame">
-                  <img src={getEyeImage('right', rightLayer)} alt="Right eye retinal capture" />
+                  <AuthenticatedImg src={getEyeImage('right', rightLayer)} alt="Right eye retinal capture" />
                   <span className="history-fundus-badge">OD · 45° Posterior Pole</span>
                   <span className="history-fundus-layer-tag">
                     {rightLayer === 'lesions' ? 'Lesion Model' : rightLayer.replace('_', ' ')}
@@ -1108,7 +1182,7 @@ export default function ScreeningDetailPage() {
               {/* Left Column: Lesion Visual Frame & Color Legend */}
               <div style={{ background: '#f8faf9', border: '1px solid #eaf0ef', borderRadius: 12, padding: 16, display: 'flex', flexDirection: 'column', gap: 12 }}>
                 <div style={{ position: 'relative', width: '100%', height: 260, borderRadius: 10, overflow: 'hidden', background: '#0a1d1f' }}>
-                  <img 
+                  <AuthenticatedImg
                     src={getEyeImage(activeLesionEye, 'lesions')} 
                     alt="Lesion Segmentation Visual" 
                     style={{ width: '100%', height: '100%', objectFit: 'cover' }}
