@@ -4,7 +4,7 @@ from database.db import get_db
 from database.models import Screening, Review, User
 from core.dependencies import get_current_user
 from sqlalchemy.sql import func
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 router = APIRouter()
 
@@ -20,7 +20,8 @@ def get_analytics(db: Session = Depends(get_db), current_user: User = Depends(ge
     ungradable_count = 0
     pipeline_times = []
     
-    today_start = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+    now_utc_naive = datetime.now(timezone.utc).replace(tzinfo=None)
+    today_start = now_utc_naive.replace(hour=0, minute=0, second=0, microsecond=0)
     today_screenings = 0
     
     for s in screenings:
@@ -47,7 +48,7 @@ def get_analytics(db: Session = Depends(get_db), current_user: User = Depends(ge
 
     # Monthly volume aggregation
     monthly_map = {}
-    now = datetime.utcnow()
+    now = now_utc_naive
     for m_back in range(5, -1, -1):
         target_date = now - timedelta(days=m_back * 30)
         m_label = target_date.strftime("%b")

@@ -1,5 +1,5 @@
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from database.db import get_db
@@ -207,7 +207,7 @@ def delete_patient(id: str, db: Session = Depends(get_db), current_user: User = 
         f"deleted_by_user_id='{current_user.id}' "
         f"role='{current_user.role}' "
         f"screenings_count={len(screening_ids)} "
-        f"timestamp='{datetime.utcnow().isoformat()}'"
+        f"timestamp='{datetime.now(timezone.utc).isoformat()}'"
     )
 
     return {"status": "ok", "message": "Patient deleted successfully"}

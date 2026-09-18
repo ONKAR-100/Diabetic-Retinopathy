@@ -9,7 +9,7 @@ local disk needed for permanent storage.
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse, RedirectResponse
 from sqlalchemy.orm import Session
-from datetime import datetime
+from datetime import datetime, timezone
 import io
 import os
 import traceback
@@ -74,7 +74,7 @@ def ensure_pdf(screening_id: str, db: Session, force: bool = False):
         )
 
     # Persist / update Report record (REP-01: ensure generated_at reflects latest generation)
-    now_utc = datetime.utcnow()
+    now_utc = datetime.now(timezone.utc).replace(tzinfo=None)
     if not rep:
         rep = Report(screening_id=scr.id, pdf_path=pdf_url, generated_at=now_utc)
         db.add(rep)

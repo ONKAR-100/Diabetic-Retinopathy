@@ -18,18 +18,34 @@ engine = create_engine(
     pool_recycle=300,           # Recycle connections every 5 minutes
 )
 
-# Verify connection at startup
-try:
-    with engine.connect() as conn:
-        conn.execute(text("SELECT 1"))
-    logger.info("Connected to Supabase PostgreSQL successfully.")
-except Exception as exc:
-    logger.warning(
-        f"Could not connect to database at {settings.DATABASE_URL}: {exc}. "
-        "Ensure DATABASE_URL in .env is configured when running live database operations."
-    )
-
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+
+def verify_db_connection() -> bool:
+    """Verify connectivity to PostgreSQL database."""
+    try:
+        with engine.connect() as conn:
+            conn.execute(text("SELECT 1"))
+        logger.info("Connected to database successfully.")
+        return True
+    except Exception as exc:
+        logger.error(f"Could not connect to database at {settings.DATABASE_URL}: {exc}")
+        return False
+
+def init_db(strict: bool = False) -> None:
+    """Initialize database tables during FastAPI startup lifespan."""
+    is_prod = settings.ENVIRONMENT in ("production", "prod")
+    try:
+        with engine.connect() as conn:
+            conn.execute(text("SELECT 1"))
+        logger.info("Connected to database successfully.")
+        Base.metadata.create_all(bind=engine)
+    except Exception as exc:
+        if strict or is_prod:
+            raise RuntimeError(f"Database initialization failed during startup: {exc}") from exc
+        logger.warning(
+            f"Database initialization skipped or failed in {settings.ENVIRONMENT} mode: {exc}. "
+            "Ensure DATABASE_URL is configured for live database operations."
+        )
 
 
 def get_db():

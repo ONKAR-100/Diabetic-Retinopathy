@@ -1,5 +1,5 @@
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from sqlalchemy import Column, String, Integer, Float, Boolean, DateTime, ForeignKey, Date, JSON, Text
 from sqlalchemy.orm import relationship
 from database.db import Base
@@ -7,6 +7,11 @@ from database.db import Base
 
 def generate_uuid():
     return str(uuid.uuid4())
+
+
+def utc_now() -> datetime:
+    """Return current UTC time as naive datetime for database compatibility."""
+    return datetime.now(timezone.utc).replace(tzinfo=None)
 
 
 class Patient(Base):
@@ -21,8 +26,8 @@ class Patient(Base):
     previous_dr = Column(String)
     previous_screening = Column(Date, nullable=True)
     hba1c = Column(String, nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=utc_now)
+    updated_at = Column(DateTime, default=utc_now, onupdate=utc_now)
 
     screenings = relationship("Screening", back_populates="patient")
 
@@ -36,7 +41,7 @@ class User(Base):
     full_name = Column(String)
     role = Column(String)
     centre = Column(String)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=utc_now)
 
 
 class Screening(Base):
@@ -109,7 +114,7 @@ class Screening(Base):
     overall_referable = Column(Boolean, nullable=True)
     recommendation = Column(String, nullable=True)
     review_status = Column(String, default="not_required")
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=utc_now)
     analyzed_at = Column(DateTime, nullable=True)
     pipeline_time_seconds = Column(Float, nullable=True)
 
@@ -145,7 +150,7 @@ class Review(Base):
     final_grade_right = Column(Integer, nullable=True)
     final_referable = Column(Boolean, nullable=True)
     notes = Column(Text, nullable=True)
-    reviewed_at = Column(DateTime, default=datetime.utcnow)
+    reviewed_at = Column(DateTime, default=utc_now)
     review_duration_seconds = Column(Float, nullable=True)
 
     screening = relationship("Screening", back_populates="reviews")
@@ -158,7 +163,7 @@ class Report(Base):
     id = Column(String, primary_key=True, default=generate_uuid)
     screening_id = Column(String, ForeignKey("screenings.id"))
     pdf_path = Column(String)
-    generated_at = Column(DateTime, default=datetime.utcnow)
+    generated_at = Column(DateTime, default=utc_now)
 
     screening = relationship("Screening", back_populates="reports")
 
@@ -238,7 +243,7 @@ class LongitudinalComparison(Base):
     recommendation = Column(Text, nullable=True)
     ai_explanation = Column(Text, nullable=True)
 
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=utc_now)
 
     patient = relationship("Patient")
     current_screening = relationship(

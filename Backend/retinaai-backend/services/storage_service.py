@@ -302,10 +302,17 @@ class StorageService:
                     obj_path = clean.split(marker_public, 1)[1].split("?")[0]
                     return self.get_signed_url(bucket, obj_path, expires_in)
                 if marker_sign in clean:
-                    return clean
+                    obj_path = clean.split(marker_sign, 1)[1].split("?")[0]
+                    return self.get_signed_url(bucket, obj_path, expires_in)
             return clean
 
-        # 2. Local media paths
+        # 2. Canonical storage object paths when Supabase is active
+        if self._client is not None:
+            if "_longitudinal_diff" in clean:
+                obj_path = clean.split("results/")[-1].lstrip("/")
+                return self.get_signed_url(settings.STORAGE_BUCKET_RESULTS, obj_path, expires_in)
+
+        # 3. Local media paths
         if clean.startswith("/api/media/"):
             return clean
 

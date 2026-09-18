@@ -3,7 +3,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session, joinedload
 import cv2
 import time
-from datetime import datetime
+from datetime import datetime, timezone
 from database.db import get_db
 from database.models import Screening, Review, User
 from schemas.analysis import AnalyzeRequest
@@ -324,7 +324,7 @@ def analyze_screening(id: str, req: AnalyzeRequest, db: Session = Depends(get_db
             )
             scr.review_status = "pending" if referable else "not_required"
             scr.pipeline_time_seconds = total_time
-            scr.analyzed_at = datetime.utcnow()
+            scr.analyzed_at = datetime.now(timezone.utc).replace(tzinfo=None)
 
         db.commit()
         db.refresh(scr)
@@ -333,7 +333,7 @@ def analyze_screening(id: str, req: AnalyzeRequest, db: Session = Depends(get_db
         # REL-04: Persist failure status and rollback any partial changes
         try:
             db.rollback()
-            scr = db.query(Screening).filter(Screening.id == id).first()
+            scr = db.query(Screening).filter((Screening.id == id) | (Screening.screening_display_id == id)).first()
             if scr:
                 scr.status = "failed"
                 db.commit()

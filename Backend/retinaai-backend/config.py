@@ -38,12 +38,9 @@ def _resolve_path(env_var: str, default_rel: str) -> str:
     if val and os.path.exists(val):
         return val
     candidates = [
-        f"D:/SIH2026/Complete Project/Models/{default_rel}",
-        f"D:/SIH2026/Complete Project/{default_rel}",
-        f"D:/SIH2026/Complete Project/Unwanted/{default_rel}",
-        os.path.join(os.path.dirname(__file__), "..", "..", "Models", default_rel),
-        os.path.join(os.path.dirname(__file__), "..", "..", default_rel),
-        os.path.join(os.path.dirname(__file__), "..", "..", "Unwanted", default_rel),
+        os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "Models", default_rel)),
+        os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", default_rel)),
+        os.path.abspath(os.path.join(os.path.dirname(__file__), "Models", default_rel)),
     ]
     for c in candidates:
         if c and os.path.exists(c):
@@ -113,8 +110,14 @@ class Settings(BaseSettings):
         "STATIC_DIR",
         os.path.abspath(os.path.join(os.path.dirname(__file__), "static"))
     )
-    UPLOAD_DIR: str = os.getenv("UPLOAD_DIR", "static/uploads")
-    RESULT_DIR: str = os.getenv("RESULT_DIR", "static/results")
+    UPLOAD_DIR: str = os.getenv(
+        "UPLOAD_DIR",
+        os.path.abspath(os.path.join(os.getenv("STATIC_DIR") or os.path.abspath(os.path.join(os.path.dirname(__file__), "static")), "uploads"))
+    )
+    RESULT_DIR: str = os.getenv(
+        "RESULT_DIR",
+        os.path.abspath(os.path.join(os.getenv("STATIC_DIR") or os.path.abspath(os.path.join(os.path.dirname(__file__), "static")), "results"))
+    )
 
     # ── Upload & Image Limits ────────────────────────────────────────────────
     MAX_UPLOAD_MB: int = int(os.getenv("MAX_UPLOAD_MB", "20"))

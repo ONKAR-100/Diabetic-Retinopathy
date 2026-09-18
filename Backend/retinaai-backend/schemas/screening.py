@@ -1,4 +1,4 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 from typing import Optional, Dict, Any, List
 from datetime import datetime
 
@@ -61,8 +61,7 @@ class ReviewData(BaseModel):
     reviewed_at: Optional[str] = None
     review_duration_seconds: Optional[float] = None
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 class ScreeningCreate(BaseModel):
     patient_id: str
@@ -82,5 +81,4 @@ class ScreeningResponse(BaseModel):
     review_status: str
     review: Optional[ReviewData] = None
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)

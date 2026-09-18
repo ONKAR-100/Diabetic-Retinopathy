@@ -1,6 +1,6 @@
 from typing import Optional, Literal
 from datetime import datetime
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict
 
 class ReviewCreate(BaseModel):
     decision: Literal["confirmed", "modified", "flagged"]
@@ -15,5 +15,4 @@ class ReviewResponse(BaseModel):
     reviewed_at: datetime
     review_duration_seconds: Optional[float] = None
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)

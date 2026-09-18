@@ -4,20 +4,14 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
 from models_loader.loaders import load_all_models
-from database.db import engine, Base
+from database.db import engine, Base, init_db, get_db
 from api import auth, patients, screenings, analysis, review, reports, analytics, longitudinal
-
-# Create tables
-try:
-    Base.metadata.create_all(bind=engine)
-except Exception:
-    pass
-
 from config import settings
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     settings.validate_jwt_secret()
+    init_db()
     load_all_models()
     yield
 
@@ -94,6 +88,16 @@ def root():
         "docs": "/docs"
     }
 
+from sqlalchemy import text
+from sqlalchemy.orm import Session
+
 @app.get("/api/health", tags=["Health"])
-def health():
-    return {"status": "ok"}
+def health(db: Session = Depends(get_db)):
+    try:
+        db.execute(text("SELECT 1"))
+        return {"status": "ok", "database": "connected"}
+    except Exception as exc:
+        raise HTTPException(
+            status_code=503,
+            detail=f"Database unavailable: {exc}"
+        )

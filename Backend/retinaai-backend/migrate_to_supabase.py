@@ -17,11 +17,16 @@ logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
 logger = logging.getLogger(__name__)
 
 # --- Configuration ---
-LOCAL_DB_URL = "postgresql://postgres:Onkar8194@localhost:8888/retinaai"
+LOCAL_DB_URL = os.getenv("LOCAL_DB_URL")
 SUPABASE_DB_URL = settings.DATABASE_URL
 
 def migrate_data():
-    if "PASTE_" in settings.SUPABASE_SERVICE_ROLE_KEY:
+    if not LOCAL_DB_URL:
+        logger.error("LOCAL_DB_URL environment variable is required to run this migration.")
+        logger.error("Set LOCAL_DB_URL in your environment or .env file before running.")
+        return
+
+    if "PASTE_" in settings.SUPABASE_SERVICE_ROLE_KEY or not settings.SUPABASE_SERVICE_ROLE_KEY:
         logger.error("Please add your SUPABASE_SERVICE_ROLE_KEY to .env before running this script.")
         logger.error("Storage migration cannot proceed without it.")
         return

@@ -77,18 +77,26 @@ def _register_images(prev_bgr: np.ndarray, curr_bgr: np.ndarray, eye: str, scree
     # Blend with current image for context
     diff_overlay = cv2.addWeighted(curr_resized, 0.55, diff_colourised, 0.45, 0)
 
-    # Save diff overlay
+    # Write to local cache directory for fast local access
     res_dir = os.path.join(settings.RESULT_DIR, screening_id)
     os.makedirs(res_dir, exist_ok=True)
     diff_path = os.path.join(res_dir, f"{eye}_longitudinal_diff.jpg")
     cv2.imwrite(diff_path, diff_overlay)
-    diff_url = "/" + diff_path.replace("\\", "/")
+
+    # Persist via storage abstraction (Supabase Storage with local fallback)
+    from services.storage_service import storage_service
+    storage_path = f"{screening_id}/{eye}_longitudinal_diff.jpg"
+    storage_service.upload_cv2_image(
+        diff_overlay,
+        settings.STORAGE_BUCKET_RESULTS,
+        storage_path
+    )
 
     return {
         "status": "success",
         "quality": round(inlier_ratio, 3),
         "transform": H.tolist(),
-        "diff_overlay_path": diff_url,
+        "diff_overlay_path": storage_path,
     }
 
 

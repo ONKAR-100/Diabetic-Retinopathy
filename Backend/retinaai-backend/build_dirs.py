@@ -1,6 +1,6 @@
 import os
 
-BASE_DIR = r"C:\Users\onkar\Projects\SIH2026\Backend\retinaai-backend"
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 directories = [
     "alembic/versions",
