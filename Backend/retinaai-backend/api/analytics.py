@@ -1,14 +1,15 @@
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 from database.db import get_db
-from database.models import Screening, Review
+from database.models import Screening, Review, User
+from core.dependencies import get_current_user
 from sqlalchemy.sql import func
 from datetime import datetime, timedelta
 
 router = APIRouter()
 
 @router.get("/summary")
-def get_analytics(db: Session = Depends(get_db)):
+def get_analytics(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     screenings = db.query(Screening).all()
     total = len(screenings)
     referable = sum(1 for s in screenings if s.overall_referable)

@@ -1,9 +1,10 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from database.db import get_db
-from database.models import Patient, Screening
+from database.models import Patient, Screening, User
 from schemas.patient import PatientCreate
 from api.screenings import map_screening_to_response
+from core.dependencies import get_current_user
 from typing import List, Optional
 
 router = APIRouter()
@@ -79,12 +80,12 @@ def serialize_patient(p: Patient, db: Session, include_screenings: bool = False)
 
 @router.get("", response_model=List[dict])
 @router.get("/", response_model=List[dict])
-def get_patients(db: Session = Depends(get_db)):
+def get_patients(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     pts = db.query(Patient).order_by(Patient.created_at.desc()).all()
     return [serialize_patient(p, db, include_screenings=False) for p in pts]
 
 @router.get("/{id}", response_model=dict)
-def get_patient(id: str, db: Session = Depends(get_db)):
+def get_patient(id: str, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     p = db.query(Patient).filter((Patient.id == id) | (Patient.patient_display_id == id)).first()
     if not p:
         raise HTTPException(404, "Patient not found")
@@ -92,7 +93,7 @@ def get_patient(id: str, db: Session = Depends(get_db)):
 
 @router.post("", response_model=dict)
 @router.post("/", response_model=dict)
-def create_patient(patient: PatientCreate, db: Session = Depends(get_db)):
+def create_patient(patient: PatientCreate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     patient_data = patient.dict()
     if not patient_data.get("patient_display_id"):
         existing_ids = db.query(Patient.patient_display_id).filter(Patient.patient_display_id.like("RTA-%")).all()
@@ -121,7 +122,7 @@ def create_patient(patient: PatientCreate, db: Session = Depends(get_db)):
 
 
 @router.delete("/{id}")
-def delete_patient(id: str, db: Session = Depends(get_db)):
+def delete_patient(id: str, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     p = db.query(Patient).filter((Patient.id == id) | (Patient.patient_display_id == id)).first()
     if not p:
         raise HTTPException(404, "Patient not found")

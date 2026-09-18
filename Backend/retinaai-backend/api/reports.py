@@ -14,11 +14,12 @@ import os
 import traceback
 
 from database.db import get_db
-from database.models import Screening, Report
+from database.models import Screening, Report, User
 from schemas.report import ReportResponse
 from models_loader.loaders import report_service
 from config import settings
 from services.storage_service import storage_service
+from core.dependencies import get_current_user
 
 router = APIRouter()
 
@@ -79,7 +80,7 @@ def ensure_pdf(screening_id: str, db: Session, force: bool = False):
 
 
 @router.get("/{screening_id}")
-def view_report_pdf(screening_id: str, db: Session = Depends(get_db)):
+def view_report_pdf(screening_id: str, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     """Redirect the browser directly to the Supabase Storage public URL or serve from local disk."""
     _, _, pdf_url = ensure_pdf(screening_id, db)
 
@@ -102,7 +103,7 @@ def view_report_pdf(screening_id: str, db: Session = Depends(get_db)):
 
 @router.post("/{screening_id}/generate", response_model=ReportResponse)
 @router.post("/{screening_id}", response_model=ReportResponse)
-def generate_report_endpoint(screening_id: str, db: Session = Depends(get_db)):
+def generate_report_endpoint(screening_id: str, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     scr, rep, pdf_url = ensure_pdf(screening_id, db, force=True)
 
     return ReportResponse(

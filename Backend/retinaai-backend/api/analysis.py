@@ -3,16 +3,17 @@ from sqlalchemy.orm import Session, joinedload
 import cv2
 import time
 from database.db import get_db
-from database.models import Screening, Review
+from database.models import Screening, Review, User
 from schemas.analysis import AnalyzeRequest
 from models_loader.loaders import pipeline_service, quality_service, enhancement_service
 from api.screenings import serialize_review, get_latest_review
+from core.dependencies import get_current_user
 
 router = APIRouter()
 
 
 @router.post("/{id}/assess-quality")
-def assess_quality(id: str, req: AnalyzeRequest, db: Session = Depends(get_db)):
+def assess_quality(id: str, req: AnalyzeRequest, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     """
     Run image quality assessment (and optional enhancement) BEFORE the full AI pipeline.
     Returns per-eye quality scores, status, and recapture reason.
@@ -193,7 +194,7 @@ def _screening_response(scr: Screening) -> dict:
 
 
 @router.post("/{id}/analyze")
-def analyze_screening(id: str, req: AnalyzeRequest, db: Session = Depends(get_db)):
+def analyze_screening(id: str, req: AnalyzeRequest, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     scr = db.query(Screening).options(
         joinedload(Screening.reviews).joinedload(Review.reviewer)
     ).filter(

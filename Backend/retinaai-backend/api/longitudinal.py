@@ -9,7 +9,7 @@ Endpoints:
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from database.db import get_db
-from database.models import Screening, Patient, LongitudinalComparison
+from database.models import Screening, Patient, LongitudinalComparison, User
 from core.dependencies import get_current_user
 from services.longitudinal_service import run_longitudinal_comparison
 
@@ -173,7 +173,7 @@ def trigger_comparison(id: str, db: Session = Depends(get_db), user=Depends(get_
 
 
 @router.get("/screenings/{id}/comparison")
-def get_comparison(id: str, db: Session = Depends(get_db)):
+def get_comparison(id: str, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     """Retrieve the existing longitudinal comparison for a screening."""
     scr = db.query(Screening).filter(
         (Screening.id == id) | (Screening.screening_display_id == id)
@@ -201,7 +201,7 @@ GRADE_NAMES = {
 
 
 @router.get("/patients/{id}/timeline")
-def get_patient_timeline(id: str, db: Session = Depends(get_db)):
+def get_patient_timeline(id: str, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     """Return all screenings for a patient, each with its comparison summary."""
     patient = db.query(Patient).filter(
         (Patient.id == id) | (Patient.patient_display_id == id)

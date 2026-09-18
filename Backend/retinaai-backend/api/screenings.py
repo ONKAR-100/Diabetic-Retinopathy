@@ -107,7 +107,7 @@ def map_screening_to_response(scr: Screening):
 
 @router.get("", response_model=dict)
 @router.get("/", response_model=dict)
-def list_screenings(page: int = 1, limit: int = 50, patient_id: Optional[str] = None, db: Session = Depends(get_db)):
+def list_screenings(page: int = 1, limit: int = 50, patient_id: Optional[str] = None, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     query = db.query(Screening).options(
         joinedload(Screening.reviews).joinedload(Review.reviewer)
     )
@@ -193,7 +193,8 @@ async def upload_image(
     eye: str = Form("left"),
     file: UploadFile = File(None),
     image: UploadFile = File(None),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
 ):
     upload = file or image
     if not upload:
@@ -234,7 +235,7 @@ async def upload_image(
 
 
 @router.get("/{id}")
-def get_screening(id: str, db: Session = Depends(get_db)):
+def get_screening(id: str, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     scr = db.query(Screening).options(
         joinedload(Screening.reviews).joinedload(Review.reviewer)
     ).filter((Screening.id == id) | (Screening.screening_display_id == id)).first()

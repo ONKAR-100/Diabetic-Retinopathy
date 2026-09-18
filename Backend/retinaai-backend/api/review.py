@@ -5,14 +5,14 @@ from datetime import datetime
 from database.db import get_db
 from database.models import Screening, Review
 from schemas.review import ReviewCreate, ReviewResponse
-from core.dependencies import get_current_user
+from core.dependencies import get_current_user, require_doctor
 
 from api.screenings import map_screening_to_response
 
 router = APIRouter()
 
 @router.get("/review/queue")
-def get_review_queue(db: Session = Depends(get_db), user = Depends(get_current_user)):
+def get_review_queue(db: Session = Depends(get_db), user = Depends(require_doctor)):
     # Return pending, ordered by grade roughly (highest left or right)
     scrs = db.query(Screening).filter(Screening.review_status == "pending").all()
     # Sort highest grade first
@@ -24,7 +24,7 @@ def get_review_queue(db: Session = Depends(get_db), user = Depends(get_current_u
     return [map_screening_to_response(s) for s in scrs]
 
 @router.post("/screenings/{id}/review", response_model=ReviewResponse)
-def submit_review(id: str, req: ReviewCreate, db: Session = Depends(get_db), user = Depends(get_current_user)):
+def submit_review(id: str, req: ReviewCreate, db: Session = Depends(get_db), user = Depends(require_doctor)):
     scr = db.query(Screening).filter(
         (Screening.id == id) | (Screening.screening_display_id == id)
     ).first()

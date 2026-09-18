@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { SectionHeader, Stepper, Card, Button } from '../components';
 import { useScreening } from '../contexts/ScreeningContext';
-import { generateReport, getReportPdfUrl } from '../services/reports';
+import { generateReport, fetchReportPdfBlobUrl } from '../services/reports';
 
 type Phase = 'generating' | 'ready' | 'error';
 
@@ -13,8 +13,11 @@ export default function ReportPage() {
   const [pdfUrl, setPdfUrl] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState('');
 
-  // Auto-generate PDF when the page mounts
+  // Auto-generate PDF and load authenticated blob when the page mounts
   useEffect(() => {
+    let currentBlobUrl: string | null = null;
+    let isMounted = true;
+
     if (!screening.screeningId) {
       setPhase('error');
       setErrorMsg('No active screening found. Please start a new screening.');
@@ -23,20 +26,39 @@ export default function ReportPage() {
 
     setPhase('generating');
     generateReport(screening.screeningId)
-      .then(() => {
-        // Add a cache-busting timestamp so the PDF loads fresh
-        const url = `${getReportPdfUrl(screening.screeningId as string)}?t=${Date.now()}`;
-        setPdfUrl(url);
-        setPhase('ready');
+      .then(async () => {
+        const url = await fetchReportPdfBlobUrl(screening.screeningId as string);
+        if (isMounted) {
+          currentBlobUrl = url;
+          setPdfUrl(url);
+          setPhase('ready');
+        } else {
+          URL.revokeObjectURL(url);
+        }
       })
-      .catch(err => {
+      .catch(async err => {
         console.error('Report generation failed:', err);
         setErrorMsg('Report generation failed. You can still try downloading directly.');
-        // Still set the URL in case the PDF already existed
-        const url = `${getReportPdfUrl(screening.screeningId as string)}?t=${Date.now()}`;
-        setPdfUrl(url);
-        setPhase('error');
+        try {
+          const url = await fetchReportPdfBlobUrl(screening.screeningId as string);
+          if (isMounted) {
+            currentBlobUrl = url;
+            setPdfUrl(url);
+          } else {
+            URL.revokeObjectURL(url);
+          }
+        } catch {
+          // Ignore secondary fetch error
+        }
+        if (isMounted) setPhase('error');
       });
+
+    return () => {
+      isMounted = false;
+      if (currentBlobUrl) {
+        URL.revokeObjectURL(currentBlobUrl);
+      }
+    };
   }, [screening.screeningId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleNewScreening = () => {
