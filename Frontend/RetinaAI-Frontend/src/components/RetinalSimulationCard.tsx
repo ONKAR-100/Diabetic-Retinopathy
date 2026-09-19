@@ -2,10 +2,10 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
   Cpu, ArrowRight, Activity, CheckCircle2, 
-  AlertCircle, RefreshCw, Layers, ShieldCheck, Sparkles 
+  AlertCircle, RefreshCw, Layers, ShieldCheck, Sparkles, Eye
 } from 'lucide-react';
-import { getPatientSimulations, simulateScreening } from '../services/simulation';
-import { RetinalSimulationRecord } from '../types/simulation';
+import { getPatientSimulations, simulateScreening, extractSimulationsList } from '../services/simulation';
+import { SimulationItem } from '../types/simulation';
 
 interface RetinalSimulationCardProps {
   patientId: string;
@@ -14,7 +14,8 @@ interface RetinalSimulationCardProps {
 
 export default function RetinalSimulationCard({ patientId, screenings = [] }: RetinalSimulationCardProps) {
   const navigate = useNavigate();
-  const [simulations, setSimulations] = useState<RetinalSimulationRecord[]>([]);
+  const [simulations, setSimulations] = useState<SimulationItem[]>([]);
+  const [selectedEyeIndex, setSelectedEyeIndex] = useState<number>(0);
   const [loading, setLoading] = useState(true);
   const [executing, setExecuting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -22,7 +23,6 @@ export default function RetinalSimulationCard({ patientId, screenings = [] }: Re
   // Find latest screening with biomarker results or complete status
   const targetScreening = React.useMemo(() => {
     if (!screenings || screenings.length === 0) return null;
-    // Prefer screening that has biomarkers or complete status
     return screenings.find((s: any) => 
       s.status === 'complete' || s.left_eye?.biomarkers || s.right_eye?.biomarkers
     ) || screenings[0];
@@ -37,11 +37,11 @@ export default function RetinalSimulationCard({ patientId, screenings = [] }: Re
         const records = await getPatientSimulations(patientId);
         if (isMounted) {
           setSimulations(records);
+          setSelectedEyeIndex(0);
           setErrorMessage(null);
         }
       } catch (err: any) {
         if (isMounted) {
-          // Graceful fallback - do not crash patient page
           setErrorMessage("Simulation records temporarily unavailable");
         }
       } finally {
@@ -52,7 +52,7 @@ export default function RetinalSimulationCard({ patientId, screenings = [] }: Re
     return () => { isMounted = false; };
   }, [patientId]);
 
-  const latestSimulation = simulations.length > 0 ? simulations[0] : null;
+  const activeSimulation = simulations.length > 0 ? (simulations[selectedEyeIndex] || simulations[0]) : null;
 
   const handleRunSimulation = async (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -64,7 +64,9 @@ export default function RetinalSimulationCard({ patientId, screenings = [] }: Re
       setExecuting(true);
       setErrorMessage(null);
       const res = await simulateScreening(screeningId, true);
-      setSimulations(prev => [res, ...prev.filter(s => s.id !== res.id)]);
+      const items = extractSimulationsList(res);
+      setSimulations(items);
+      setSelectedEyeIndex(0);
     } catch (err: any) {
       const msg = err.response?.data?.detail || "Simulation execution encountered an issue. Please verify biomarker availability.";
       setErrorMessage(typeof msg === 'string' ? msg : "Simulation failed to complete.");
@@ -123,7 +125,7 @@ export default function RetinalSimulationCard({ patientId, screenings = [] }: Re
         <div>
           {loading ? (
             <span style={{ fontSize: 11, color: '#889da0', fontFamily: 'var(--font-mono)' }}>Loading...</span>
-          ) : latestSimulation?.execution_status === 'completed' ? (
+          ) : activeSimulation?.execution_status === 'completed' ? (
             <span style={{
               display: 'inline-flex',
               alignItems: 'center',
@@ -138,7 +140,7 @@ export default function RetinalSimulationCard({ patientId, screenings = [] }: Re
             }}>
               <CheckCircle2 size={12} /> Simulated
             </span>
-          ) : latestSimulation?.execution_status === 'failed' ? (
+          ) : activeSimulation?.execution_status === 'failed' ? (
             <span style={{
               display: 'inline-flex',
               alignItems: 'center',
@@ -190,8 +192,37 @@ export default function RetinalSimulationCard({ patientId, screenings = [] }: Re
         </div>
       )}
 
+      {/* Eye Toggle if multiple simulated eyes exist */}
+      {simulations.length > 1 && (
+        <div style={{ display: 'flex', gap: 6 }}>
+          {simulations.map((sim, idx) => (
+            <button
+              key={sim.id || idx}
+              type="button"
+              onClick={() => setSelectedEyeIndex(idx)}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 5,
+                padding: '4px 10px',
+                borderRadius: 8,
+                fontSize: 11,
+                fontWeight: 700,
+                border: selectedEyeIndex === idx ? '1px solid #0e6264' : '1px solid #dce8e7',
+                background: selectedEyeIndex === idx ? '#0e6264' : '#f8faf9',
+                color: selectedEyeIndex === idx ? '#ffffff' : '#456164',
+                cursor: 'pointer'
+              }}
+            >
+              <Eye size={12} />
+              <span>{sim.eye ? `${sim.eye.toUpperCase()} Eye` : `Eye #${idx + 1}`}</span>
+            </button>
+          ))}
+        </div>
+      )}
+
       {/* Content depending on state */}
-      {latestSimulation && latestSimulation.execution_status === 'completed' && latestSimulation.output_state ? (
+      {activeSimulation && activeSimulation.execution_status === 'completed' && activeSimulation.output_state ? (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
           {/* Eye & Version indicator */}
           <div style={{
@@ -204,8 +235,8 @@ export default function RetinalSimulationCard({ patientId, screenings = [] }: Re
             background: '#f8faf9',
             borderRadius: 8
           }}>
-            <span>Eye: <strong style={{ color: '#132b2e', textTransform: 'capitalize' }}>{latestSimulation.eye} Eye</strong></span>
-            <span style={{ fontFamily: 'var(--font-mono)' }}>Model v{latestSimulation.model_version}</span>
+            <span>Eye: <strong style={{ color: '#132b2e', textTransform: 'capitalize' }}>{activeSimulation.eye} Eye</strong></span>
+            <span style={{ fontFamily: 'var(--font-mono)' }}>Model v{activeSimulation.model_version}</span>
           </div>
 
           {/* 4 State Equilibrium Outputs */}
@@ -217,28 +248,28 @@ export default function RetinalSimulationCard({ patientId, screenings = [] }: Re
             <div style={{ background: '#f4f8f7', padding: '10px 12px', borderRadius: 10 }}>
               <span style={{ fontSize: 10.5, color: '#688285', display: 'block' }}>Structural Complexity</span>
               <strong style={{ fontFamily: 'var(--font-mono)', fontSize: 15, color: '#0e6264' }}>
-                {latestSimulation.output_state.structural_complexity_state.toFixed(4)}
+                {activeSimulation.output_state.structural_complexity_state.toFixed(4)}
               </strong>
             </div>
 
             <div style={{ background: '#f4f8f7', padding: '10px 12px', borderRadius: 10 }}>
               <span style={{ fontSize: 10.5, color: '#688285', display: 'block' }}>Tortuosity State</span>
               <strong style={{ fontFamily: 'var(--font-mono)', fontSize: 15, color: '#d97706' }}>
-                {latestSimulation.output_state.tortuosity_computational_state.toFixed(4)}
+                {activeSimulation.output_state.tortuosity_computational_state.toFixed(4)}
               </strong>
             </div>
 
             <div style={{ background: '#f4f8f7', padding: '10px 12px', borderRadius: 10 }}>
               <span style={{ fontSize: 10.5, color: '#688285', display: 'block' }}>Vascular Bed Density</span>
               <strong style={{ fontFamily: 'var(--font-mono)', fontSize: 15, color: '#2563eb' }}>
-                {latestSimulation.output_state.vascular_bed_density_state.toFixed(4)}
+                {activeSimulation.output_state.vascular_bed_density_state.toFixed(4)}
               </strong>
             </div>
 
             <div style={{ background: '#eff6ff', border: '1px solid #dbeafe', padding: '10px 12px', borderRadius: 10 }}>
               <span style={{ fontSize: 10.5, color: '#3b82f6', display: 'block', fontWeight: 600 }}>Composite State</span>
               <strong style={{ fontFamily: 'var(--font-mono)', fontSize: 15, color: '#1d4ed8' }}>
-                {latestSimulation.output_state.composite_retinal_computational_state.toFixed(4)}
+                {activeSimulation.output_state.composite_retinal_computational_state.toFixed(4)}
               </strong>
             </div>
           </div>
@@ -312,7 +343,7 @@ export default function RetinalSimulationCard({ patientId, screenings = [] }: Re
           title={targetScreening ? "Run or recompute computational simulation" : "No screening available"}
         >
           <RefreshCw size={13} className={executing ? "animate-spin" : ""} />
-          <span>{executing ? 'Simulating...' : latestSimulation ? 'Re-run' : 'Simulate'}</span>
+          <span>{executing ? 'Simulating...' : activeSimulation ? 'Re-run' : 'Simulate'}</span>
         </button>
       </div>
 

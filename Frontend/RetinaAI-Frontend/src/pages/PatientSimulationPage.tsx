@@ -10,15 +10,15 @@ import {
   YAxis, Tooltip, Legend, CartesianGrid 
 } from 'recharts';
 import { getPatient } from '../services/patients';
-import { getPatientSimulations, simulateScreening } from '../services/simulation';
-import { RetinalSimulationRecord } from '../types/simulation';
+import { getPatientSimulations, simulateScreening, extractSimulationsList } from '../services/simulation';
+import { SimulationItem } from '../types/simulation';
 
 export default function PatientSimulationPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
 
   const [patient, setPatient] = useState<any>(null);
-  const [simulations, setSimulations] = useState<RetinalSimulationRecord[]>([]);
+  const [simulations, setSimulations] = useState<SimulationItem[]>([]);
   const [selectedSimIndex, setSelectedSimIndex] = useState<number>(0);
   const [loading, setLoading] = useState<boolean>(true);
   const [recomputing, setRecomputing] = useState<boolean>(false);
@@ -59,7 +59,7 @@ export default function PatientSimulationPage() {
     return () => { isMounted = false; };
   }, [id]);
 
-  const activeSimulation: RetinalSimulationRecord | null = useMemo(() => {
+  const activeSimulation: SimulationItem | null = useMemo(() => {
     if (simulations.length === 0) return null;
     return simulations[selectedSimIndex] || simulations[0];
   }, [simulations, selectedSimIndex]);
@@ -76,19 +76,29 @@ export default function PatientSimulationPage() {
   const chartData = useMemo(() => {
     if (!activeSimulation?.trajectory) return [];
     const traj = activeSimulation.trajectory;
-    const timeArr = traj.time || [];
-    const compArr = traj.structural_complexity || [];
-    const tortArr = traj.tortuosity || [];
-    const densArr = traj.vascular_bed_density || [];
-    const compositeArr = traj.composite_state || [];
+    // Harmonize with backend schema (theta, complexity_curve, tortuosity_curve, density_curve)
+    const thetaArr = traj.theta || traj.time || [];
+    const compArr = traj.complexity_curve || traj.structural_complexity || [];
+    const tortArr = traj.tortuosity_curve || traj.tortuosity || [];
+    const densArr = traj.density_curve || traj.vascular_bed_density || [];
 
-    return timeArr.map((t, idx) => ({
-      theta: Number(t.toFixed(2)),
-      structural_complexity: compArr[idx] !== undefined ? Number(compArr[idx].toFixed(4)) : 0,
-      tortuosity: tortArr[idx] !== undefined ? Number(tortArr[idx].toFixed(4)) : 0,
-      vascular_bed_density: densArr[idx] !== undefined ? Number(densArr[idx].toFixed(4)) : 0,
-      composite_state: compositeArr[idx] !== undefined ? Number(compositeArr[idx].toFixed(4)) : 0,
-    }));
+    return thetaArr.map((t, idx) => {
+      const c = compArr[idx] !== undefined ? Number(compArr[idx].toFixed(4)) : 0;
+      const tr = tortArr[idx] !== undefined ? Number(tortArr[idx].toFixed(4)) : 0;
+      const d = densArr[idx] !== undefined ? Number(densArr[idx].toFixed(4)) : 0;
+
+      // Exact Phase 7 Composite Formula:
+      // S_composite = (1 / sqrt(3)) * sqrt(S_complexity^2 + S_tortuosity^2 + S_density^2), clamped to [0, 1]
+      const compVal = Math.min(1.0, Math.max(0.0, (1.0 / Math.sqrt(3.0)) * Math.sqrt(c * c + tr * tr + d * d)));
+
+      return {
+        theta: Number(t.toFixed(2)),
+        structural_complexity: c,
+        tortuosity: tr,
+        vascular_bed_density: d,
+        composite_state: Number(compVal.toFixed(4)),
+      };
+    });
   }, [activeSimulation]);
 
   const handleRecompute = async () => {
@@ -101,11 +111,9 @@ export default function PatientSimulationPage() {
     try {
       setRecomputing(true);
       setErrorMessage(null);
-      const updated = await simulateScreening(screeningId, true);
-      setSimulations(prev => {
-        const filtered = prev.filter(s => s.id !== updated.id);
-        return [updated, ...filtered];
-      });
+      const updatedResponse = await simulateScreening(screeningId, true);
+      const items = extractSimulationsList(updatedResponse);
+      setSimulations(items);
       setSelectedSimIndex(0);
     } catch (err: any) {
       const msg = err.response?.data?.detail || "Simulation failed. Please verify biomarker availability.";

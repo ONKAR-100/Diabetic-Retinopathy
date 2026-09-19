@@ -18,6 +18,8 @@ The platform integrates real-time fundus **Image Quality Assessment (IQA)**, ada
 - [How It Works](#-how-it-works)
 - [System Architecture](#-system-architecture)
 - [Diagnostic Modalities & Biomarker Pipelines](#-diagnostic-modalities--biomarker-pipelines)
+- [Phase 6 — MATLAB Retinal Biomarker Subsystem](#-phase-6--matlab-retinal-biomarker-subsystem)
+- [Phase 7 — Simulink Retinal Computational Modeling](#-phase-7--simulink-retinal-computational-modeling)
 - [Tech Stack](#-tech-stack)
 - [Project Directory Structure](#-project-directory-structure)
 - [Prerequisites](#-prerequisites)
@@ -194,6 +196,96 @@ Diabetic Retinopathy (DR) is the leading cause of preventable vision impairment 
 | **Lesion Profiling** | Multi-Head Segmentation Ensemble | $512 \times 512 \times 3$ | Microaneurysms, Hemorrhages, Hard Exudates, Neovascularization Detection & Counts |
 | **Visual Explainability** | Layer-Hooked Gradient-Weighted Class Activation Mapping (Grad-CAM) | $300 \times 300 \times 3$ | Heatmap Blend (Alpha=0.4, Jet Colormap) reflecting model focus |
 | **Longitudinal Progression** | Retinal Landmark Alignment & Delta Classifier | Sequential Pairs | Longitudinal Progression Status (`Stable`, `Worsening`, `Improvement`), Biomarker Shift Deltas ($\Delta$) |
+
+---
+
+## 🧮 Phase 6 — MATLAB Retinal Biomarker Subsystem
+
+RetinaAI incorporates a standalone and engine-integrated MATLAB biomarker analysis subsystem located in `MATLAB/retina_biomarkers.m`. This frozen subsystem executes downstream of PyTorch image segmentation to extract quantitative morphological and vascular indices directly from the segmented fundus vessel mask and anatomical landmarks.
+
+### 1. Extracted Quantitative Biomarkers
+- **Vascular Density & Branching**:
+  - **Foreground Vessel Density ($V_d$)**: Percentage ratio of segmented foreground vascular pixels within the active retinal field of view.
+  - **Skeleton Branch Count ($N_{\text{branch}}$)**: Morphological skeletonization and endpoint/junction graph analysis yielding total vessel segments.
+  - **Zone-B Bifurcation Count ($N_{\text{zb}}$)**: Peripapillary branching count measured specifically within standard peripapillary Zone B ($1.0 \times \text{ODR}$ to $1.5 \times \text{ODR}$ from the optic disc margin).
+- **Vascular Tortuosity**:
+  - **Distance Tortuosity ($\tau_d$)**: Chord-length ratio metric ($\frac{L}{C} - 1$) measuring vessel extension over straight-line path.
+  - **Curvature-Squared Tortuosity ($\tau_c$)**: Integrated squared curvature along skeletonized vessel centerlines ($\int \kappa^2(s) \, ds$, in $\text{px}^{-2}$).
+  - **Max Branch Tortuosity**: Peak tortuosity among significant vascular branches.
+- **Fractal Complexity**:
+  - **Fractal Dimension ($D_f$)**: Multi-scale box-counting fractal dimension on skeletonized vascular network (typical physiological range $0.95 - 1.10$).
+  - **Fit Linearity ($R^2$)**: Goodness of log-log linear regression fit assessing self-similarity reliability.
+- **Arteriolar-to-Venular Ratio (AVR) Metadata**:
+  - **Parr-Hubbard Arteriolar Equiv (CRAE) & Venular Equiv (CRVE)**: Caliber estimations within peripapillary Zone B.
+  - **Geometric Fallback Prior**: In fundus images where image-based optic disc boundaries are ambiguous, an anatomical prior (7.5% of minimum dimension) automatically engages to prevent unhandled numerical divergence.
+  - *Note*: CRAE, CRVE, and AVR remain auxiliary biomedical research metadata and are not inputs to the Simulink state-space core.
+
+### 2. Architecture & Engine Integration
+- **Persistent Engine**: Python's `MatlabService` initializes a persistent headless MATLAB engine session (`matlab.engine.start_matlab("-nodesktop -nosplash -noFigureWindows")`).
+- **Concurrency & Thread Safety**: Inter-process communication is protected by Python `threading.Lock()` to ensure sequential execution across asynchronous screening requests.
+- **Failure Isolation**: If MATLAB is offline or uninstalled, the service catches exceptions, logs diagnostics, and allows the screening pipeline to complete DR grading without server crashes.
+- **Scientific Guardrail**: Biomarker outputs represent quantitative morphological indices for biomedical research and are not standalone clinical diagnostic decisions.
+
+---
+
+## ⚡ Phase 7 — Simulink Retinal Computational State-Space Modeling
+
+Phase 7 introduces dynamic continuous-time linear time-invariant (LTI) state-space simulation into the RetinaAI architecture, modeling the relaxation dynamics of retinal vascular features downstream of Phase 6 biomarkers.
+
+### 1. State-Space Mathematical Formulation
+The retinal computational state is defined by a continuous-time 3-dimensional dynamic system:
+$$\dot{\mathbf{x}}(\theta) = \mathbf{A} \mathbf{x}(\theta) + \mathbf{B} \mathbf{u}, \quad \mathbf{x}(0) = \begin{bmatrix} 0 \\ 0 \\ 0 \end{bmatrix}, \quad \mathbf{y}(\theta) = \mathbf{C} \mathbf{x}(\theta) + \mathbf{D} \mathbf{u}$$
+
+Where:
+- **State Vector $\mathbf{x}(\theta)$**:
+  - $x_1(\theta)$: Structural complexity computational state
+  - $x_2(\theta)$: Tortuosity computational state
+  - $x_3(\theta)$: Vascular bed density computational state
+- **System Matrices**:
+  $$\mathbf{A} = -\mathbf{I}_3 = \begin{bmatrix} -1 & 0 & 0 \\ 0 & -1 & 0 \\ 0 & 0 & -1 \end{bmatrix}, \quad \mathbf{C} = \mathbf{I}_3, \quad \mathbf{D} = \mathbf{0}_{3 \times 6}$$
+  $$\mathbf{B} = \begin{bmatrix} 0 & 0.50 & 0 & 0 & 0 & 0.50 \\ 0 & 0 & 0 & 0.60 & 0.40 & 0 \\ 0.60 & 0 & 0.40 & 0 & 0 & 0 \end{bmatrix}$$
+  *Note*: Each row of $\mathbf{B}$ has convex sum $= 1.0$, ensuring asymptotic stability with eigenvalues at $\lambda = -1$ and analytical equilibrium $\mathbf{x}(\infty) = \mathbf{B}\mathbf{u}$.
+- **Composite Retinal State**:
+  $$S_{\text{composite}}(\theta) = \frac{1}{\sqrt{3}} \|\mathbf{x}(\theta)\|_2 = \frac{1}{\sqrt{3}} \sqrt{x_1^2 + x_2^2 + x_3^2} \in [0, 1]$$
+
+### 2. Canonical Normalization Contract (v1.0.0)
+Six normalized inputs $\mathbf{u} = [u_{\text{dens}}, u_{\text{branch}}, u_{\text{zb}}, u_{\tau d}, u_{\tau c}, u_{Df}^*]$ are deterministically clamped to $[0, 1]$:
+- $u_{\text{dens}} = \text{clamp}(V_d / 0.20, 0, 1)$
+- $u_{\text{branch}} = \text{clamp}(N_{\text{branch}} / 500, 0, 1)$
+- $u_{\text{zb}} = \text{clamp}(N_{\text{zb}} / 30, 0, 1)$
+- $u_{\tau d} = \text{clamp}(\tau_d / 0.04, 0, 1)$
+- $u_{\tau c} = \text{clamp}(\tau_c / 0.30, 0, 1)$
+- $u_{Df,\text{raw}} = \text{clamp}((D_f - 0.85) / 0.35, 0, 1)$
+- $w_{\text{fit}} = \text{clamp}((R^2 - 0.90) / 0.10, 0, 1)$
+- $u_{Df}^* = w_{\text{fit}} \cdot u_{Df,\text{raw}} + (1 - w_{\text{fit}}) \cdot 0.50$
+
+### 3. Simulink Model Execution & Persistence
+- **Model File**: `MATLAB/retina_computational_state.slx` (programmatically generated by `MATLAB/build_retina_simulink_model.m`).
+- **Solver Configuration**: Fixed-step `ode4` (Runge-Kutta 4th Order), step size $\Delta \theta = 0.1$, StopTime $= 10.0$ (101 trajectory samples).
+- **Computational Relaxation Time ($\theta$)**: $\theta \in [0, 10]$ represents **dimensionless computational relaxation time** in state space. It is strictly **not** biological time, patient age, or disease progression duration.
+- **Persistence**: Results are stored in the `retinal_simulations` database table (with cascade deletion to `Patient` and `Screening`).
+- **Dedicated API Endpoints**:
+  - `POST /api/screenings/{screening_id}/simulate`: Executes on-demand simulation.
+  - `GET /api/screenings/{screening_id}/simulation`: Fetches simulation by screening.
+  - `GET /api/patients/{patient_id}/simulation`: Fetches patient-level simulation envelope (`left`, `right`).
+- **Frontend Visualization**:
+  - `RetinalSimulationCard.tsx`: Compact summary card mounted on the patient profile.
+  - `PatientSimulationPage.tsx`: Dedicated workstation page displaying interactive Recharts trajectory curves across $\theta = 0 \to 10$, terminal state gauges, and raw vs normalized input comparison tables.
+
+### 4. Verification & Reproducibility Commands
+```powershell
+# 1. Run MATLAB Standalone Verification Suite
+matlab -batch "cd('MATLAB'); test_simulink_standalone; test_biomarkers_standalone; test_numerical_edge_cases"
+
+# 2. Run Targeted Phase 7 Backend Integration Suite
+pytest Backend/retinaai-backend/test_phase7_simulink.py -v
+
+# 3. Rebuild Simulink Model Programmatically (if needed)
+matlab -batch "cd('MATLAB'); build_retina_simulink_model"
+```
+
+### 5. Research & Engineering Guardrails
+> **Research & Engineering Notice**: Retinal computational simulations are mathematical state-space representations for biomedical engineering and quantitative hemodynamics analysis. They are **NOT** clinically validated diagnostic, risk prediction, disease progression forecasting, or clinical prognostic scores.
 
 ---
 
