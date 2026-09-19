@@ -62,7 +62,7 @@ class StorageService:
 
     # ── Internal initializer (called lazily on first use) ────────────────────
     def _init(self):
-        if self._initialized:
+        if self._initialized or self._client is not None:
             return
         self._initialized = True
 

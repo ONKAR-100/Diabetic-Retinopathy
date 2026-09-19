@@ -2,6 +2,7 @@ import os
 import secrets
 import logging
 from typing import List
+from pydantic import field_validator
 from pydantic_settings import BaseSettings
 from dotenv import load_dotenv
 
@@ -112,14 +113,35 @@ class Settings(BaseSettings):
         "STATIC_DIR",
         os.path.abspath(os.path.join(os.path.dirname(__file__), "static"))
     )
-    UPLOAD_DIR: str = os.getenv(
-        "UPLOAD_DIR",
-        os.path.abspath(os.path.join(os.getenv("STATIC_DIR") or os.path.abspath(os.path.join(os.path.dirname(__file__), "static")), "uploads"))
-    )
-    RESULT_DIR: str = os.getenv(
-        "RESULT_DIR",
-        os.path.abspath(os.path.join(os.getenv("STATIC_DIR") or os.path.abspath(os.path.join(os.path.dirname(__file__), "static")), "results"))
-    )
+    UPLOAD_DIR: str = ""
+    RESULT_DIR: str = ""
+
+    @field_validator("STATIC_DIR", mode="after")
+    @classmethod
+    def _anchor_static_dir(cls, v: str) -> str:
+        if v and os.path.isabs(v):
+            return v
+        return os.path.abspath(os.path.join(os.path.dirname(__file__), v or "static"))
+
+    @field_validator("UPLOAD_DIR", mode="after")
+    @classmethod
+    def _anchor_upload_dir(cls, v: str, info) -> str:
+        if v and os.path.isabs(v):
+            return v
+        static = info.data.get("STATIC_DIR") if info and hasattr(info, "data") else None
+        static_dir = static or os.path.abspath(os.path.join(os.path.dirname(__file__), "static"))
+        sub = os.path.basename(v) if v else "uploads"
+        return os.path.abspath(os.path.join(static_dir, sub))
+
+    @field_validator("RESULT_DIR", mode="after")
+    @classmethod
+    def _anchor_result_dir(cls, v: str, info) -> str:
+        if v and os.path.isabs(v):
+            return v
+        static = info.data.get("STATIC_DIR") if info and hasattr(info, "data") else None
+        static_dir = static or os.path.abspath(os.path.join(os.path.dirname(__file__), "static"))
+        sub = os.path.basename(v) if v else "results"
+        return os.path.abspath(os.path.join(static_dir, sub))
 
     # ── Upload & Image Limits ────────────────────────────────────────────────
     MAX_UPLOAD_MB: int = int(os.getenv("MAX_UPLOAD_MB", "20"))

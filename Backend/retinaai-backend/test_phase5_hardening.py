@@ -258,7 +258,8 @@ def test_resolve_path_candidates():
     """Verify _resolve_path finds existing repository models without developer machine assumptions."""
     path = _resolve_path("NON_EXISTENT_ENV", "dr_grade/best_efficientnet_b2.pth")
     assert os.path.exists(path), f"Model path candidate must resolve to existing file: {path}"
-    assert "SIH2026" not in path, "Resolved path should not contain developer machine folder"
+    repo_root = os.path.abspath(os.path.join(backend_root, "..", ".."))
+    assert path.startswith(repo_root), f"Resolved path must be inside repository root: {path}"
 
 
 # ============================================================================
