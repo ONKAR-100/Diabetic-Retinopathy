@@ -199,7 +199,7 @@ class MatlabService:
                     return None
                 try:
                     f = float(val)
-                    return None if np.isnan(f) else round(f, 4)
+                    return None if (np.isnan(f) or np.isinf(f)) else round(f, 4)
                 except (ValueError, TypeError):
                     return None
 
@@ -208,8 +208,10 @@ class MatlabService:
                     return None
                 try:
                     f = float(val)
-                    return None if np.isnan(f) else int(round(f))
-                except (ValueError, TypeError):
+                    if np.isnan(f) or np.isinf(f):
+                        return None
+                    return int(round(f))
+                except (ValueError, TypeError, OverflowError):
                     return None
 
             elapsed = time.time() - t_start

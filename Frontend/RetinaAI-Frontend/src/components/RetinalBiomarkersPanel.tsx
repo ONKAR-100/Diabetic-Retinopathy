@@ -38,7 +38,7 @@ export function RetinalBiomarkersPanel({
   const status = biomarkers?.status || (isAvailable ? 'completed' : 'unavailable');
   const isCompleted = status === 'completed';
   const isSkipped = status === 'skipped';
-  const isFailed = status === 'failed';
+  const isFailed = status === 'failed' || status === 'error';
 
   return (
     <div style={{

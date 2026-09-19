@@ -116,10 +116,10 @@ fprintf('    - Foreground Vessel Density:  %.2f %%\n', biomarkers.vessel_density
 fprintf('    - Skeleton Branch Count:      %d branches\n', length(diagnostics.branch_details.lengths));
 fprintf('\n 2. VESSEL TORTUOSITY:\n');
 fprintf('    - Mean Tortuosity (Distance): %.4f (Distance metric: L/C - 1)\n', biomarkers.mean_tortuosity_distance);
-fprintf('    - Mean Tortuosity (Curvature):%.4f (Curvature-squared integral)\n', biomarkers.mean_tortuosity_curvature);
+fprintf('    - Mean Tortuosity (Curvature):%.4f (Curvature-squared integral, px^-2)\n', biomarkers.mean_tortuosity_curvature);
 fprintf('    - Maximum Branch Tortuosity:  %.4f\n', biomarkers.max_tortuosity);
 fprintf('\n 3. FRACTAL COMPLEXITY:\n');
-fprintf('    - Fractal Dimension (D_f):    %.4f (Normal range: 1.38 - 1.46)\n', biomarkers.fractal_dimension);
+fprintf('    - Skeleton Fractal Dim (D_f): %.4f (Skeleton range: 0.95 - 1.10; Mask range: 1.38 - 1.46)\n', biomarkers.fractal_dimension);
 fprintf('    - Linearity of Fit (R^2):     %.4f\n', biomarkers.fractal_r_squared);
 fprintf('\n 4. ARTERIOLAR-TO-VENULAR RATIO (AVR):\n');
 fprintf('    - Optic Disc Radius Used:     %.1f pixels\n', diagnostics.estimated_od_radius);

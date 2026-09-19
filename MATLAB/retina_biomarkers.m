@@ -33,9 +33,9 @@ function [biomarkers, diagnostic_struct] = retina_biomarkers(vessel_mask, fundus
 %                    .crae_pixels                  - Central Retinal Arteriolar Equivalent (pixels)
 %                    .crve_pixels                  - Central Retinal Venular Equivalent (pixels)
 %                    .mean_tortuosity_distance     - Length-weighted distance-metric tortuosity (tau_d >= 0)
-%                    .mean_tortuosity_curvature    - Length-weighted curvature-integral tortuosity (tau_c >= 0)
+%                    .mean_tortuosity_curvature    - Length-weighted curvature-integral tortuosity (tau_c >= 0, units: px^-2, scale-dependent)
 %                    .max_tortuosity               - Maximum tortuosity observed among significant branches
-%                    .fractal_dimension            - Box-counting dimension D_f (slope of log(N) vs log(1/s))
+%                    .fractal_dimension            - Box-counting dimension D_f of vascular skeleton (slope of log(N) vs log(1/s))
 %                    .fractal_r_squared            - Coefficient of determination R^2 of fractal fit
 %                    .vessel_density               - Foreground vascular density ratio (0.0 to 1.0)
 %
@@ -99,8 +99,9 @@ function [biomarkers, diagnostic_struct] = retina_biomarkers(vessel_mask, fundus
         od_center = [double(od_center(1)), double(od_center(2))];
     end
 
-    % Standardize Fovea Center
-    if nargin < 4 || isempty(fovea_center) || any(isnan(fovea_center))
+    % Standardize Fovea Center (gate out-of-bounds or NaN coordinates)
+    if nargin < 4 || isempty(fovea_center) || any(isnan(fovea_center)) || ...
+       fovea_center(1) < 1 || fovea_center(1) > W || fovea_center(2) < 1 || fovea_center(2) > H
         fovea_center = [NaN, NaN];
     else
         fovea_center = [double(fovea_center(1)), double(fovea_center(2))];
@@ -263,7 +264,12 @@ function [od_radius, success] = estimate_od_radius_hough(fundus_rgb, od_center)
 end
 
 function [mean_tau_d, mean_tau_c, max_tau, branch_details] = compute_tortuosity(skel, min_len)
-    % Decomposes skeleton into isolated branches and computes distance & curvature metrics
+    % Decomposes skeleton into isolated branches and computes distance & curvature metrics.
+    % NOTE ON CURVATURE TORTUOSITY (tau_c):
+    % tau_c computes the mean squared curvature (1/L * sum(kappa^2)) along skeleton segments.
+    % In pixel coordinate space, kappa has units of px^-1, and tau_c has units of px^-2.
+    % It is scale-dependent (inversely proportional to image magnification squared) and is
+    % intended as an intra-cohort computational morphometry index, not a scale-invariant physical metric.
     branch_pts = bwmorph(skel, 'branchpoints');
     
     % Disconnect branch points to isolate independent segments
@@ -387,9 +393,23 @@ function [D_f, R2, box_data] = compute_fractal_dimension(skel, box_sizes)
         num_boxes(i) = count;
     end
     
+    % Filter out non-positive box counts to prevent log(0) -> -Inf in regression
+    % Degenerate geometry (isolated points or tiny speckles < 15 px) cannot sustain vascular fractal scaling
+    valid_mask = (num_boxes > 0);
+    if sum(skel(:)) < 15 || max(num_boxes) <= 1 || sum(valid_mask) < 3
+        D_f = NaN;
+        R2 = NaN;
+        box_data = struct('box_sizes', valid_sizes, 'box_counts', num_boxes, ...
+                          'log_inv_s', [], 'log_N', [], 'slope', NaN, 'r_squared', NaN);
+        return;
+    end
+
+    reg_sizes = valid_sizes(valid_mask);
+    reg_counts = num_boxes(valid_mask);
+
     % Linear regression on log-log coordinates
-    log_inv_s = log(1.0 ./ double(valid_sizes(:)));
-    log_N = log(double(num_boxes));
+    log_inv_s = log(1.0 ./ double(reg_sizes(:)));
+    log_N = log(double(reg_counts(:)));
     
     p = polyfit(log_inv_s, log_N, 1);
     D_f = p(1);
