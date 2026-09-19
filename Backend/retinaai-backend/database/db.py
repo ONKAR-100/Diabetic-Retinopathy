@@ -13,9 +13,10 @@ engine = create_engine(
     settings.DATABASE_URL,
     connect_args=_connect_args,
     pool_pre_ping=True,         # Detect and recycle stale connections
-    pool_size=5,                # Conservative pool for Supabase free tier
-    max_overflow=10,
-    pool_recycle=300,           # Recycle connections every 5 minutes
+    pool_size=10,               # Robust pool for concurrent web UI requests
+    max_overflow=20,
+    pool_recycle=180,           # Recycle connections every 3 minutes
+    pool_timeout=20,            # Bounded pool checkout timeout
 )
 
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)

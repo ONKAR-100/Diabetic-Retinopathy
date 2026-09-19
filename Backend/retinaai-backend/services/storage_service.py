@@ -28,6 +28,7 @@ import io
 import logging
 import os
 import tempfile
+import time
 from typing import Optional
 
 import cv2
@@ -59,6 +60,7 @@ class StorageService:
         self._client: Optional["Client"] = None
         self._base_url: str = ""
         self._initialized = False
+        self._signed_url_cache: dict = {}
 
     # ── Internal initializer (called lazily on first use) ────────────────────
     def _init(self):
@@ -206,22 +208,40 @@ class StorageService:
         Generate a short-lived signed URL for an object in a private Supabase bucket.
         Default expiry: 900 seconds (15 minutes).
         Falls back to authenticated /api/media/... path if Supabase is unavailable.
+        Uses in-memory caching to eliminate redundant network roundtrips and connection pool exhaustion.
         """
+        if not path:
+            return ""
+
+        clean = path.replace("\\", "/").lstrip("/")
+        cache_key = (bucket, clean)
+        now = time.time()
+
+        cached = self._signed_url_cache.get(cache_key)
+        if cached:
+            url, exp = cached
+            if now < exp:
+                return url
+
         self._init()
         if self._client is not None:
             try:
-                res = self._client.storage.from_(bucket).create_signed_url(path, expires_in)
-                if isinstance(res, dict):
+                res = self._client.storage.from_(bucket).create_signed_url(clean, expires_in)
+                if isinstance(res, dict) or hasattr(res, "get"):
                     signed = res.get("signedURL") or res.get("signedUrl") or res.get("url")
                     if signed:
+                        self._signed_url_cache[cache_key] = (signed, now + (expires_in * 0.8))
                         return signed
                 elif isinstance(res, str):
+                    self._signed_url_cache[cache_key] = (res, now + (expires_in * 0.8))
                     return res
             except Exception as exc:
-                logger.error(f"Failed to create signed URL for {bucket}/{path}: {exc}")
+                logger.warning(f"Failed to create signed URL for {bucket}/{clean}: {exc}")
+                fallback = f"/api/media/{clean}"
+                self._signed_url_cache[cache_key] = (fallback, now + 30.0)
+                return fallback
 
         # Local fallback
-        clean = path.replace("\\", "/").lstrip("/")
         return f"/api/media/{clean}"
 
     def get_public_url(self, bucket: str, path: str) -> str:
