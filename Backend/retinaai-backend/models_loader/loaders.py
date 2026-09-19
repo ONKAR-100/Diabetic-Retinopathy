@@ -13,6 +13,7 @@ from services.calibration_service import CalibrationService
 from services.matlab_service import MatlabService
 from services.pipeline_service import PipelineService
 from services.report_service import ReportService
+from services.simulink_service import SimulinkService
 
 # Global instances
 quality_service = QualityService()
@@ -28,6 +29,12 @@ matlab_service = MatlabService(
     matlab_scripts_dir=settings.MATLAB_SCRIPTS_PATH,
     timeout_sec=settings.MATLAB_TIMEOUT_SECONDS,
     enabled=settings.ENABLE_MATLAB_BIOMARKERS
+)
+simulink_service = SimulinkService(
+    matlab_service=matlab_service,
+    matlab_scripts_dir=settings.MATLAB_SCRIPTS_PATH,
+    timeout_sec=settings.SIMULINK_TIMEOUT_SECONDS,
+    enabled=settings.ENABLE_SIMULINK
 )
 
 pipeline_service = PipelineService(

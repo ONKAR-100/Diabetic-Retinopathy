@@ -99,11 +99,13 @@ class Settings(BaseSettings):
     OD_FOVEA_MODEL_PATH: str = _resolve_path("OD_FOVEA_MODEL_PATH", "od_fovea_localization/best_fundus_localization_model.pth")
     LESION_MODEL_PATH: str = _resolve_path("LESION_MODEL_PATH", "lesion_segmentation/fundus_ensemble_bundle.pth")
     ENABLE_MATLAB_BIOMARKERS: bool = os.getenv("ENABLE_MATLAB_BIOMARKERS", "true").lower() in ("true", "1", "yes")
+    ENABLE_SIMULINK: bool = os.getenv("ENABLE_SIMULINK", "true").lower() in ("true", "1", "yes")
     MATLAB_SCRIPTS_PATH: str = os.getenv(
         "MATLAB_SCRIPTS_PATH",
         os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "MATLAB"))
     )
     MATLAB_TIMEOUT_SECONDS: int = int(os.getenv("MATLAB_TIMEOUT_SECONDS", "60"))
+    SIMULINK_TIMEOUT_SECONDS: int = int(os.getenv("SIMULINK_TIMEOUT_SECONDS", "30"))
 
     # ── Local static & temp dirs ─────────────────────────────────────────────
     STATIC_DIR: str = os.getenv(

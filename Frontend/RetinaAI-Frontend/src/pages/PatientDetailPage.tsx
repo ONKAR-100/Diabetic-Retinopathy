@@ -11,6 +11,7 @@ import { getScreening, getPatientTimeline } from '../services/screenings';
 import { useScreening } from '../contexts/ScreeningContext';
 import { patients as mockPatients, screenings as mockScreenings } from '../mock/data';
 import { ProgressionStatus } from '../types';
+import RetinalSimulationCard from '../components/RetinalSimulationCard';
 
 export default function PatientDetailPage() {
   const { id } = useParams();
@@ -558,6 +559,9 @@ export default function PatientDetailPage() {
               </div>
             </div>
           </div>
+
+          {/* Retinal Computational Simulation Card (Phase 7) */}
+          <RetinalSimulationCard patientId={patient.id || id} screenings={screenings} />
         </div>
 
         {/* Right Column: Longitudinal Screening Timeline */}

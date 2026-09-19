@@ -26,6 +26,7 @@ import SettingsPage from './pages/SettingsPage';
 import ReportsListPage from './pages/ReportsListPage';
 import LongitudinalPage from './pages/LongitudinalPage';
 import PatientLongitudinalHistoryPage from './pages/PatientLongitudinalHistoryPage';
+import PatientSimulationPage from './pages/PatientSimulationPage';
 
 export default function App() {
   return (
@@ -59,6 +60,7 @@ export default function App() {
                   <Route path="/patients/records" element={<PatientsPage />} />
                   <Route path="/patients/:id" element={<PatientDetailPage />} />
                   <Route path="/patients/:id/history" element={<PatientLongitudinalHistoryPage />} />
+                  <Route path="/patients/:id/simulation" element={<PatientSimulationPage />} />
                   <Route path="/comparison/:id" element={<LongitudinalPage />} />
                   <Route path="/history" element={<HistoryPage />} />
                   <Route path="/screening/history" element={<HistoryPage />} />

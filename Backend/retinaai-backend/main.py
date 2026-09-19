@@ -5,7 +5,7 @@ from fastapi.staticfiles import StaticFiles
 
 from models_loader.loaders import load_all_models
 from database.db import engine, Base, init_db, get_db
-from api import auth, patients, screenings, analysis, review, reports, analytics, longitudinal
+from api import auth, patients, screenings, analysis, review, reports, analytics, longitudinal, simulation
 from config import settings
 
 @asynccontextmanager
@@ -78,6 +78,7 @@ app.include_router(review.router, prefix="/api", tags=["Review"])
 app.include_router(reports.router, prefix="/api/reports", tags=["Reports"])
 app.include_router(analytics.router, prefix="/api/analytics", tags=["Analytics"])
 app.include_router(longitudinal.router, prefix="/api", tags=["Longitudinal"])
+app.include_router(simulation.router, prefix="/api", tags=["Simulation"])
 
 @app.get("/", tags=["Root"])
 def root():
