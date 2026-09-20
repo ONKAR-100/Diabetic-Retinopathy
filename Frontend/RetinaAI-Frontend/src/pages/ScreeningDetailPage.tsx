@@ -1331,7 +1331,7 @@ export default function ScreeningDetailPage() {
           <div style={{ background: '#f8faf9', border: '1px solid #eef3f2', borderRadius: 12, padding: 16 }}>
             <span style={{ fontSize: 11, fontWeight: 700, color: '#0e6264', textTransform: 'uppercase', letterSpacing: '0.06em' }}>DR Grading</span>
             <div style={{ fontFamily: 'var(--font-display)', fontSize: 17, fontWeight: 700, color: '#132c2f', marginTop: 4 }}>
-              EfficientNet-B2
+              Hybrid Ensemble Model
             </div>
             <div style={{ fontSize: 12, color: '#567275', marginTop: 6 }}>
               Suggested: <strong style={{ color: isReferable ? '#b73d44' : '#1a7751' }}>

@@ -167,6 +167,7 @@ class StorageService:
                 if attempt == 0 and "Server disconnected" in str(exc):
                     # Stale keep-alive HTTP socket; reset client and retry once
                     self._client = None
+                    self._initialized = False
                     self._init()
                     if self._client is not None:
                         continue
@@ -249,6 +250,7 @@ class StorageService:
                 if "Server disconnected" in str(exc):
                     try:
                         self._client = None
+                        self._initialized = False
                         self._init()
                         if self._client is not None:
                             res = self._client.storage.from_(bucket).create_signed_url(clean, expires_in)
@@ -289,6 +291,7 @@ class StorageService:
                 if "Server disconnected" in str(exc):
                     try:
                         self._client = None
+                        self._initialized = False
                         self._init()
                         if self._client is not None:
                             return self._client.storage.from_(bucket).download(path)

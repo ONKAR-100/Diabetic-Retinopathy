@@ -82,8 +82,6 @@ export default function AnalyzePage() {
 
       analyzeScreening(screening.screeningId, 'both')
         .then(res => {
-          if (unmountedRef.current) return;
-
           // Clear any remaining timers
           if (stageTimerRef.current) clearTimeout(stageTimerRef.current);
 
@@ -107,14 +105,13 @@ export default function AnalyzePage() {
 
           // 4. Show the completion state briefly (700ms), then automatically navigate
           setTimeout(() => {
-            if (!navigatedRef.current && !unmountedRef.current) {
+            if (!navigatedRef.current) {
               navigatedRef.current = true;
               nav('/screening/result');
             }
           }, 700);
         })
         .catch(err => {
-          if (unmountedRef.current) return;
           console.error('Analysis pipeline execution error:', err);
 
           if (stageTimerRef.current) clearTimeout(stageTimerRef.current);

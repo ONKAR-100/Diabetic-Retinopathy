@@ -4,7 +4,7 @@ import { Network, Cloud, ShieldCheck, Cpu } from 'lucide-react';
 
 export default function SystemStatusPage() {
   const services = [
-    { name: 'DR Grading (EfficientNet-B2)', status: 'ONLINE', latency: '4.2s', desc: '5-Class classification + Grad-CAM' },
+    { name: 'DR Grading (Hybrid Ensemble Model)', status: 'ONLINE', latency: '4.2s', desc: '5-Class classification + Grad-CAM' },
     { name: 'Vessel Segmentation (U-Net)', status: 'ONLINE', latency: '4.8s', desc: 'ResNet34 encoder, 512x512' },
     { name: 'Optic Disc & Fovea (ResUNet)', status: 'ONLINE', latency: '3.6s', desc: 'Dual-peak anatomical localization' },
     { name: 'Image Quality Gate (FFT/Exposure)', status: 'ONLINE', latency: '0.4s', desc: '3-tier gating + CLAHE enhancement' },

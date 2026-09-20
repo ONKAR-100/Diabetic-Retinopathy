@@ -32,8 +32,8 @@ export const PIPELINE_STAGES: StageInfo[] = [
     id: 'dr_classification',
     name: 'DR Classification',
     shortName: 'DR Grade',
-    model: 'EfficientNet-B2 (5-Class)',
-    description: 'Evaluating diabetic retinopathy severity grade (0 to 4)',
+    model: 'Hybrid Ensemble Model',
+    description: 'Multi-class severity grading using Deep Learning',
     runningText: 'Running deep learning classification for Diabetic Retinopathy…',
   },
   {
