@@ -40,11 +40,10 @@ export default function AnalyzePage() {
   }, []);
 
   const runAnalysis = () => {
-    if (!screening.screeningId || isRunningRef.current) return;
-    isRunningRef.current = true;
-    hasTriggeredRef.current = screening.screeningId;
+    if (!screening.screeningId) return;
 
-    // Reset states
+    // We ALWAYS reset UI states and start timers, because if this is a React StrictMode
+    // remount, the previous timers were destroyed by the cleanup function.
     setActiveStageIndex(0);
     setProgressPercent(0);
     setIsAllCompleted(false);
@@ -76,56 +75,62 @@ export default function AnalyzePage() {
     scheduleNextStage(0);
 
     // TRIGGER THE ACTUAL BACKEND AI PIPELINE API
-    analyzeScreening(screening.screeningId, 'both')
-      .then(res => {
-        if (unmountedRef.current) return;
+    // Only fire the API once per screening session to avoid double-processing in StrictMode
+    if (hasTriggeredRef.current !== screening.screeningId) {
+      hasTriggeredRef.current = screening.screeningId;
+      isRunningRef.current = true;
 
-        // Clear any remaining timers
-        if (stageTimerRef.current) clearTimeout(stageTimerRef.current);
+      analyzeScreening(screening.screeningId, 'both')
+        .then(res => {
+          if (unmountedRef.current) return;
 
-        // Format and store results
-        const result = {
-          screening_id: res.screening_id || res.id || screening.screeningId,
-          left_eye: res.left_eye || null,
-          right_eye: res.right_eye || null,
-          overall_referable: res.overall_referable ?? false,
-          recommendation: res.recommendation || '',
-          review_status: res.review_status || 'not_required',
-        };
-        setResult(result as any);
+          // Clear any remaining timers
+          if (stageTimerRef.current) clearTimeout(stageTimerRef.current);
 
-        // 1. Mark all stages as completed
-        setActiveStageIndex(PIPELINE_STAGES.length);
-        // 2. Set overall progress to exactly 100%
-        setProgressPercent(100);
-        // 3. Mark complete
-        setIsAllCompleted(true);
+          // Format and store results
+          const result = {
+            screening_id: res.screening_id || res.id || screening.screeningId,
+            left_eye: res.left_eye || null,
+            right_eye: res.right_eye || null,
+            overall_referable: res.overall_referable ?? false,
+            recommendation: res.recommendation || '',
+            review_status: res.review_status || 'not_required',
+          };
+          setResult(result as any);
 
-        // 4. Show the completion state briefly (700ms), then automatically navigate
-        setTimeout(() => {
-          if (!navigatedRef.current && !unmountedRef.current) {
-            navigatedRef.current = true;
-            nav('/screening/result');
-          }
-        }, 700);
-      })
-      .catch(err => {
-        if (unmountedRef.current) return;
-        console.error('Analysis pipeline execution error:', err);
+          // 1. Mark all stages as completed
+          setActiveStageIndex(PIPELINE_STAGES.length);
+          // 2. Set overall progress to exactly 100%
+          setProgressPercent(100);
+          // 3. Mark complete
+          setIsAllCompleted(true);
 
-        if (stageTimerRef.current) clearTimeout(stageTimerRef.current);
+          // 4. Show the completion state briefly (700ms), then automatically navigate
+          setTimeout(() => {
+            if (!navigatedRef.current && !unmountedRef.current) {
+              navigatedRef.current = true;
+              nav('/screening/result');
+            }
+          }, 700);
+        })
+        .catch(err => {
+          if (unmountedRef.current) return;
+          console.error('Analysis pipeline execution error:', err);
 
-        const msg =
-          err?.response?.data?.detail ||
-          err?.message ||
-          'Failed to complete AI model execution. Please check backend service status.';
+          if (stageTimerRef.current) clearTimeout(stageTimerRef.current);
 
-        setIsError(true);
-        setErrorMessage(msg);
-      })
-      .finally(() => {
-        isRunningRef.current = false;
-      });
+          const msg =
+            err?.response?.data?.detail ||
+            err?.message ||
+            'Failed to complete AI model execution. Please check backend service status.';
+
+          setIsError(true);
+          setErrorMessage(msg);
+        })
+        .finally(() => {
+          isRunningRef.current = false;
+        });
+    }
   };
 
   const handleRetry = () => {
@@ -135,7 +140,7 @@ export default function AnalyzePage() {
   };
 
   useEffect(() => {
-    if (screening.screeningId && hasTriggeredRef.current !== screening.screeningId) {
+    if (screening.screeningId) {
       runAnalysis();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
