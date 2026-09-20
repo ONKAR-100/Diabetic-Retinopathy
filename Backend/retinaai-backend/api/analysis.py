@@ -1,6 +1,6 @@
 import logging
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy.orm import Session, joinedload
+from sqlalchemy.orm import Session, joinedload, exc as orm_exc
 import cv2
 import time
 from datetime import datetime, timezone
@@ -228,6 +228,9 @@ def analyze_screening(id: str, req: AnalyzeRequest, db: Session = Depends(get_db
     if not scr:
         raise HTTPException(404, "Screening not found")
 
+    scr_uuid = str(scr.id)
+    scr_display_id = str(scr.screening_display_id)
+
     # CLIN-02: Reviewed screening immutability guard
     if scr.review_status == "reviewed":
         raise HTTPException(
@@ -345,16 +348,24 @@ def analyze_screening(id: str, req: AnalyzeRequest, db: Session = Depends(get_db
 
         db.commit()
         db.refresh(scr)
+    except orm_exc.StaleDataError as exc:
+        db.rollback()
+        logger.warning(f"Screening {scr_uuid} ({scr_display_id}) was deleted from the database during analysis: {exc}")
+        raise HTTPException(
+            status_code=404,
+            detail="Screening record was deleted or modified during analysis."
+        )
     except Exception as exc:
-        logger.error(f"Inference pipeline execution failed for screening {scr.id}: {exc}", exc_info=True)
+        db.rollback()
+        logger.error(f"Inference pipeline execution failed for screening {scr_uuid}: {exc}", exc_info=True)
         # REL-04: Persist failure status and rollback any partial changes
         try:
-            db.rollback()
-            scr = db.query(Screening).filter((Screening.id == id) | (Screening.screening_display_id == id)).first()
-            if scr:
-                scr.status = "failed"
+            scr_rec = db.query(Screening).filter((Screening.id == scr_uuid) | (Screening.screening_display_id == scr_display_id)).first()
+            if scr_rec:
+                scr_rec.status = "failed"
                 db.commit()
         except Exception as inner_exc:
+            db.rollback()
             logger.error(f"Failed to persist 'failed' status for screening {id}: {inner_exc}")
         raise HTTPException(
             status_code=500,

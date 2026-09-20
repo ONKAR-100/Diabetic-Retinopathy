@@ -130,6 +130,25 @@ class StorageService:
                     except Exception as exc:
                         logger.warning(f"Could not update bucket {bucket} to private: {exc}")
 
+    @staticmethod
+    def _is_transient_network_error(exc: Exception) -> bool:
+        msg = str(exc).lower()
+        transient_indicators = (
+            "server disconnected",
+            "unexpected_eof_while_reading",
+            "streamreset",
+            "connection reset",
+            "remotedisconnected",
+            "connection terminated",
+            "connection closed",
+            "broken pipe",
+            "eof occurred in violation of protocol",
+            "transport error",
+            "timeout",
+            "ssl",
+        )
+        return any(ind in msg for ind in transient_indicators)
+
     # ── Core upload ──────────────────────────────────────────────────────────
     def upload_bytes(
         self,
@@ -164,8 +183,8 @@ class StorageService:
                 logger.debug(f"Uploaded to Supabase private storage: {bucket}/{path}")
                 return signed_url
             except Exception as exc:
-                if attempt == 0 and "Server disconnected" in str(exc):
-                    # Stale keep-alive HTTP socket; reset client and retry once
+                if attempt == 0 and self._is_transient_network_error(exc):
+                    # Stale keep-alive HTTP socket or dropped SSL stream; reset client and retry once
                     self._client = None
                     self._initialized = False
                     self._init()
@@ -247,7 +266,7 @@ class StorageService:
                     self._signed_url_cache[cache_key] = (res, now + (expires_in * 0.8))
                     return res
             except Exception as exc:
-                if "Server disconnected" in str(exc):
+                if self._is_transient_network_error(exc):
                     try:
                         self._client = None
                         self._initialized = False
@@ -288,7 +307,7 @@ class StorageService:
                 data = self._client.storage.from_(bucket).download(path)
                 return data
             except Exception as exc:
-                if "Server disconnected" in str(exc):
+                if self._is_transient_network_error(exc):
                     try:
                         self._client = None
                         self._initialized = False
