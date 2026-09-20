@@ -257,17 +257,21 @@ def analyze_screening(id: str, req: AnalyzeRequest, db: Session = Depends(get_db
     import concurrent.futures
 
     try:
-        def process_eye(eye: str):
-            path = getattr(scr, f"{eye}_image_path")
-            bgr = cv2.imread(path)
+        def process_eye(eye_name: str, image_path: str, screening_id_str: str):
+            bgr = cv2.imread(image_path)
             if bgr is None:
                 return None
-            res = pipeline_service.run(bgr, eye, str(scr.id), image_path=path)
-            return eye, res
+            res = pipeline_service.run(bgr, eye_name, screening_id_str, image_path=image_path)
+            return eye_name, res
+
+        # Pre-extract data on main thread to avoid SQLAlchemy lazy-load concurrency issues
+        tasks = []
+        for eye in eyes_to_process:
+            tasks.append((eye, getattr(scr, f"{eye}_image_path"), str(scr.id)))
 
         # Run left and right eye pipelines concurrently
         with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
-            futures = [executor.submit(process_eye, eye) for eye in eyes_to_process]
+            futures = [executor.submit(process_eye, t[0], t[1], t[2]) for t in tasks]
             for future in concurrent.futures.as_completed(futures):
                 result = future.result()
                 if not result:
