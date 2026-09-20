@@ -60,6 +60,15 @@ def get_media_file(
     if not target_path.startswith(static_root + os.sep) and target_path != static_root:
         raise HTTPException(status_code=403, detail="Access denied: path outside static directory")
 
+    # If the file is missing at the root, check if it exists in one of the semantic subfolders.
+    # This prevents redownloading files that were already saved (e.g., during older uploads).
+    if not os.path.isfile(target_path):
+        for subfolder in ["uploads", "results", "reports"]:
+            candidate = os.path.abspath(os.path.join(static_root, subfolder, *parts))
+            if os.path.isfile(candidate):
+                target_path = candidate
+                break
+
     if not os.path.isfile(target_path):
         # On-demand fallback: attempt to download from Supabase Storage if missing locally
         from services.storage_service import storage_service
