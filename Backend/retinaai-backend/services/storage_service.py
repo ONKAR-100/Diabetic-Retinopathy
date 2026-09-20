@@ -286,6 +286,14 @@ class StorageService:
                 data = self._client.storage.from_(bucket).download(path)
                 return data
             except Exception as exc:
+                if "Server disconnected" in str(exc):
+                    try:
+                        self._client = None
+                        self._init()
+                        if self._client is not None:
+                            return self._client.storage.from_(bucket).download(path)
+                    except Exception:
+                        pass
                 logger.error(f"Supabase download failed for {bucket}/{path}: {exc}")
 
         # Local fallback
