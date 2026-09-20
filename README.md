@@ -56,18 +56,21 @@ Diabetic Retinopathy (DR) is the leading cause of preventable vision impairment 
 ## ✨ Key Features
 
 - 👁️ **3-Tier Image Quality Gate (IQA)**: Evaluates sharpness, illumination, contrast, and field of view (FOV). Categorizes images into `Good`, `Borderline` (auto-enhanced via CLAHE and bilateral filtering), or `Ungradable` (with human-readable recapture instructions).
-- 🏷️ **5-Class DR Severity Grading**: Classifies fundus photographs into International Clinical Diabetic Retinopathy (ICDR) severity levels:
+- 🏷️ **5-Class DR Severity Grading (Hybrid Ensemble Model)**: Classifies fundus photographs into International Clinical Diabetic Retinopathy (ICDR) severity levels with multi-class confidence distribution:
   - **Level 0**: No DR
   - **Level 1**: Mild NPDR
   - **Level 2**: Moderate NPDR *(Referable DR threshold)*
   - **Level 3**: Severe NPDR
   - **Level 4**: Proliferative DR (PDR)
+- ⚡ **Dual-Threaded Concurrent Inference**: Bilateral screenings process Left (`OS`) and Right (`OD`) eyes concurrently using an asynchronous `ThreadPoolExecutor`, halving end-to-end multi-eye screening latency while maintaining complete thread safety and database isolation.
 - 🌡️ **Temperature-Calibrated Probabilities**: Raw softmax probabilities are calibrated using temperature scaling ($T=1.5$), providing realistic confidence scores and reducing overconfident misclassifications.
 - 🩸 **Microvascular & Anatomical Localization**:
   - **Vessel Segmentation**: U-Net ResNet-34 extracts microvascular trees and computes vascular density percentages.
   - **Optic Disc & Fovea**: ResUNet detects anatomical centroids and marks the macula/foveal avascular zone (FAZ).
   - **Lesion Profiling**: Modular ensemble detection for microaneurysms, hemorrhages, hard exudates, and neovascularization.
 - 🔍 **Grad-CAM Visual Attention Maps**: High-resolution heatmaps highlighting retinal regions driving the model's classification, clearly differentiated from segmentation masks.
+- 🧮 **MATLAB & Simulink Computational Hemodynamics**: Combines deep learning inference with Phase 6 MATLAB fractal/tortuosity biomarker extraction and Phase 7 continuous-time state-space dynamic relaxation modeling.
+- ☁️ **Enterprise Cloud Storage & Resilient Fallback**: Stores high-resolution clinical assets in private Supabase Storage buckets with short-lived signed URLs, automatic reconnection loops for transient network interruptions (handling SSL EOF, stream resets, and stale HTTP/2 sockets), and instant local disk caching.
 - 🧑‍⚕️ **Human-in-the-Loop Review Queue**: Dedicated triage workflow for ophthalmologists. Reviewers can validate AI predictions, alter diagnostic grades, log clinical notes, and mark cases as confirmed, modified, or flagged in <30 seconds.
 - 📄 **Automated Clinical PDF Reports**: Generates formal diagnostic reports using ReportLab with patient demographics, bilateral fundus montages, color-coded lesion keys, doctor attribution, and definitive triage recommendations.
 - 📈 **Longitudinal Retinal Progression Engine**:
@@ -80,67 +83,71 @@ Diabetic Retinopathy (DR) is the leading cause of preventable vision impairment 
 ## ⚙️ How It Works
 
 ```
-┌─────────────────┐       ┌────────────────────────┐       ┌────────────────────────┐
-│  Fundus Image   │ ────> │  Image Quality Gate    │ ────> │  Adaptive Enhancement  │
-│  Upload (OS/OD) │       │ (Sharpness/Illum./FOV) │       │ (CLAHE + Bilateral)    │
-└─────────────────┘       └────────────────────────┘       └────────────────────────┘
-                                      │                                 │
-                                      ▼ If Ungradable                   ▼ If Borderline/Good
-                            ┌───────────────────┐             ┌───────────────────┐
-                            │ Recapture Reason  │             │ Parallel Model    │
-                            │ & Doctor Guidance │             │ Inference Workers │
-                            └───────────────────┘             └───────────────────┘
-                                                                        │
-                   ┌──────────────────────┬──────────────────────┬──────┴───────────────┐
-                   ▼                      ▼                      ▼                      ▼
-         ┌──────────────────┐   ┌──────────────────┐   ┌──────────────────┐   ┌──────────────────┐
-         │ EfficientNet-B2  │   │ U-Net ResNet-34  │   │ ResUNet Detector │   │ Ensemble Lesion  │
-         │ DR Classification│   │ Vessel Mask &    │   │ Optic Disc &     │   │ Masking & Counts │
-         │ & Probabilities  │   │ Vascular Density │   │ Fovea Centroids  │   │ (MA, HE, EX, NV) │
-         └──────────────────┘   └──────────────────┘   └──────────────────┘   └──────────────────┘
-                   │                      │                      │                      │
-                   └──────────────────────┼──────────────────────┴──────────────────────┘
-                                          ▼
-                             ┌──────────────────────────┐
-                             │ Post-Processing &        │
-                             │ Temperature Calibration  │
-                             └──────────────────────────┘
-                                          │
-                                          ▼
-                             ┌──────────────────────────┐
-                             │ Grad-CAM Attention Maps  │
-                             └──────────────────────────┘
-                                          │
-                                          ▼
-                             ┌──────────────────────────┐
-                             │ Longitudinal Engine      │
-                             │ (Alignment & Delta)      │
-                             └──────────────────────────┘
-                                          │
-                                          ▼
-                             ┌──────────────────────────┐
-                             │ Review Queue & Triage /  │
-                             │ Automated PDF Generation │
-                             └──────────────────────────┘
+┌──────────────────┐       ┌────────────────────────┐       ┌────────────────────────┐
+│   Fundus Image   │ ────> │  Image Quality Gate    │ ────> │  Adaptive Enhancement  │
+│  Upload (OS/OD)  │       │ (Sharpness/Illum./FOV) │       │ (CLAHE + Bilateral)    │
+└──────────────────┘       └────────────────────────┘       └────────────────────────┘
+                                       │                                 │
+                                       ▼ If Ungradable                   ▼ If Borderline/Good
+                             ┌───────────────────┐             ┌───────────────────────────┐
+                             │ Recapture Reason  │             │ Dual-Threaded Concurrent  │
+                             │ & Doctor Guidance │             │ Eye Workers (Left + Right)│
+                             └───────────────────┘             └─────────────┬─────────────┘
+                                                                             │
+                    ┌──────────────────────┬──────────────────────┬──────────┴───────────┬──────────────────────┐
+                    ▼                      ▼                      ▼                      ▼                      ▼
+          ┌──────────────────┐   ┌──────────────────┐   ┌──────────────────┐   ┌──────────────────┐   ┌──────────────────┐
+          │ Hybrid Ensemble  │   │ U-Net ResNet-34  │   │ ResUNet Detector │   │ Ensemble Lesion  │   │ Phase 6 MATLAB   │
+          │ DR Model (0 - 4) │   │ Vessel Mask &    │   │ Optic Disc &     │   │ Masking & Counts │   │ Biomarkers       │
+          │ & Probabilities  │   │ Vascular Density │   │ Fovea Centroids  │   │ (MA, HE, EX, NV) │   │ (Tortuosity/Df)  │
+          └──────────────────┘   └──────────────────┘   └──────────────────┘   └──────────────────┘   └────────┬─────────┘
+                    │                      │                      │                      │                     │
+                    └──────────────────────┼──────────────────────┴──────────────────────┴─────────────────────┤
+                                           ▼                                                                   ▼
+                              ┌──────────────────────────┐                                            ┌──────────────────┐
+                              │ Post-Processing, Grad-CAM│                                            │ Phase 7 Simulink │
+                              │ & Temperature Calibration│                                            │ 3D State-Space   │
+                              └────────────┬─────────────┘                                            │ Dynamic Model    │
+                                           │                                                          └────────┬─────────┘
+                                           └─────────────────────────────┬─────────────────────────────────────┘
+                                                                         ▼
+                                                            ┌──────────────────────────┐
+                                                            │ Cloud Storage Persistence│
+                                                            │ (Supabase + Local Disk)  │
+                                                            └────────────┬─────────────┘
+                                                                         │
+                                                                         ▼
+                                                            ┌──────────────────────────┐
+                                                            │ Longitudinal Engine      │
+                                                            │ (Alignment & Delta)      │
+                                                            └────────────┬─────────────┘
+                                                                         │
+                                                                         ▼
+                                                            ┌──────────────────────────┐
+                                                            │ Review Queue & Triage /  │
+                                                            │ Automated PDF Generation │
+                                                            └──────────────────────────┘
 ```
 
 1. **Ingestion & Quality Assessment**: Fundus photographs (JPEG/PNG) are uploaded per eye (Left `OS` / Right `OD`). The quality service computes Laplacian variance (focus), mean intensity (illumination), and convex hull contour ratio (retinal FOV).
 2. **Conditional Enhancement**: Images categorized as borderline are enhanced via Contrast Limited Adaptive Histogram Equalization (CLAHE) on the L-channel in CIELAB color space, followed by bilateral denoising.
-3. **Parallel Multimodal Inference**: A Python `ThreadPoolExecutor` distributes computation across independent models:
-   - **DR Grade**: EfficientNet-B2 computes softmax logits across the 5 ICDR classes.
-   - **Vessel Extraction**: U-Net segments the microvascular tree and determines vessel density.
+3. **Dual-Threaded Concurrent Multimodal Inference**: A Python `ThreadPoolExecutor` distributes computation across independent models for both eyes concurrently:
+   - **DR Grade**: Hybrid Ensemble Model computes calibrated softmax logits across the 5 ICDR classes.
+   - **Vessel Extraction**: U-Net segments the microvascular tree and determines vessel density percentage.
    - **Optic Disc & Fovea**: ResUNet generates dual-channel heatmaps to localize anatomical landmarks.
-   - **Lesion Analysis**: Detects and counts microaneurysms, hemorrhages, hard exudates, and neovascularization.
-4. **Grad-CAM & Calibration**: Saliency gradients from EfficientNet's final convolutional layer are backpropagated with respect to the predicted class. Raw probabilities are scaled via temperature calibration.
-5. **Longitudinal Comparison**: If prior examinations exist for the patient, the longitudinal engine aligns baseline and current fundus structures, computes biomarker changes ($\Delta$ grade, vessel density drift, lesion counts), and flags progression status (`Stable`, `Possible Worsening`, or `Possible Improvement`).
-6. **Ophthalmologist Triage & Reporting**: The case is assigned to the doctor's review queue. Once validated, an official PDF medical summary is compiled and stored.
+   - **Lesion Analysis**: Multi-head ensemble detects and counts microaneurysms, hemorrhages, hard exudates, and neovascularization.
+   - **MATLAB Biomarkers & Simulink**: Computes tortuosity, vascular branching, fractal dimension, and feeds the 3D continuous-time state-space dynamic model.
+4. **Grad-CAM & Calibration**: Saliency gradients from the final convolutional layer are backpropagated with respect to the predicted class. Raw probabilities are scaled via temperature calibration ($T=1.5$).
+5. **Resilient Cloud & Local Storage**: Ingested photographs and generated visual artifacts are persisted to private Supabase Storage buckets with short-lived signed URLs, backed by instant local disk caching and automated socket reconnect retry loops.
+6. **Longitudinal Comparison**: If prior examinations exist for the patient, the longitudinal engine aligns baseline and current fundus structures, computes biomarker changes ($\Delta$ grade, vessel density drift, lesion counts), and flags progression status (`Stable`, `Possible Worsening`, or `Possible Improvement`).
+7. **Ophthalmologist Triage & Reporting**: The case is assigned to the doctor's review queue. Once validated, an official PDF medical summary is compiled and stored.
 
 ---
 
 ## 🏗️ System Architecture
 
 ```
-                                  RETINAAI WORKSTATION
+                                   RETINAAI WORKSTATION
 ┌────────────────────────────────────────────────────────────────────────────────────────┐
 │                               FRONTEND (React 19 + TypeScript + Vite)                  │
 │                                                                                        │
@@ -152,6 +159,9 @@ Diabetic Retinopathy (DR) is the leading cause of preventable vision impairment 
 │  │ Ophthalmologist       │  │ Biomarker & Grad-CAM  │  │ Unified Screening          │  │
 │  │ Review Queue          │  │ Visualizer Tabs       │  │ Comparison Block           │  │
 │  └───────────────────────┘  └───────────────────────┘  └────────────────────────────┘  │
+│  ┌──────────────────────────────────────────────────┐  ┌────────────────────────────┐  │
+│  │ PatientSimulationPage (Simulink State Trajectory)│  │ RetinalSimulationCard      │  │
+│  └──────────────────────────────────────────────────┘  └────────────────────────────┘  │
 └───────────────────────────────────────────┬────────────────────────────────────────────┘
                                             │ HTTP / REST (Axios + JWT Interceptors)
                                             ▼
@@ -163,23 +173,25 @@ Diabetic Retinopathy (DR) is the leading cause of preventable vision impairment 
 │  └──────────────────────────────────────────────────────────────────────────────────┘  │
 │  ┌──────────────────────────────────────────────────────────────────────────────────┐  │
 │  │ Core Services: QualityGate | Enhancer | PipelineOrchestrator | LongitudinalEngine│  │
+│  │ StorageService (Private Supabase + Resilient Reconnect + Local Fallback)         │  │
+│  │ MatlabService (Persistent Headless Engine) | SimulinkService (State-Space LTI)   │  │
 │  └──────────────────────────────────────────────────────────────────────────────────┘  │
 │  ┌──────────────────────────────────────────────────────────────────────────────────┐  │
-│  │ PyTorch Inference Engines:                                                        │  │
-│  │  • EfficientNet-B2 (DR Grade)     • U-Net ResNet34 (Vessel Segmentation)         │  │
-│  │  • ResUNet (OD & Fovea Centroids) • Fundus Ensemble (Lesion Segmentation)        │  │
-│  │  • Grad-CAM Saliency Engine       • Temperature Scaling Calibrator               │  │
+│  │ Dual-Threaded Concurrent Inference Orchestrator (concurrent.futures.ThreadPool): │  │
+│  │  • Hybrid Ensemble Model (DR Grade 0-4) • U-Net ResNet34 (Vessel Segmentation)   │  │
+│  │  • ResUNet (OD & Fovea Centroids)       • Fundus Ensemble (Lesion Segmentation)  │  │
+│  │  • Grad-CAM Saliency Engine             • Temperature Scaling Probability Scaler │  │
 │  └──────────────────────────────────────────────────────────────────────────────────┘  │
 └──────────────────────┬─────────────────────────────────────────┬───────────────────────┘
                        │                                         │
                        ▼                                         ▼
          ┌───────────────────────────┐             ┌───────────────────────────┐
-         │ Relational Database       │             │ Static Storage            │
-         │ (PostgreSQL / SQLite)     │             │ • /static/uploads/        │
-         │ SQLAlchemy ORM + Alembic  │             │ • /static/results/        │
-         │ Patients, Screenings,     │             │ • /static/reports/        │
-         │ Comparisons, Reviews      │             └───────────────────────────┘
-         └───────────────────────────┘
+         │ Relational Database       │             │ Hybrid Storage Layer      │
+         │ (PostgreSQL / SQLite)     │             │ • Private Supabase Storage│
+         │ SQLAlchemy ORM + Alembic  │             │   (Signed clinical URLs)  │
+         │ Patients, Screenings,     │             │ • Local Mirror / Fallback │
+         │ Comparisons, Simulations  │             │   (/static/uploads/results│
+         └───────────────────────────┘             └───────────────────────────┘
 ```
 
 ---
@@ -190,11 +202,13 @@ Diabetic Retinopathy (DR) is the leading cause of preventable vision impairment 
 | :--- | :--- | :--- | :--- |
 | **Image Quality Gate (IQA)** | Laplacian Variance, Mean Intensity & Retinal ROI Masking | Native Resolution | Focus Score, Brightness, Contrast, FOV ratio (`Good` / `Borderline` / `Ungradable` + Recapture feedback) |
 | **Adaptive Enhancement** | CIELAB CLAHE + Bilateral Filtering + Illumination Normalization | Native Resolution | Contrast-equalized BGR fundus frame |
-| **DR Severity Grading** | EfficientNet-B2 (5-Class Classifier, `timm`) | $300 \times 300 \times 3$ | Level 0–4 Severity Grade, Softmax Logits, Calibrated Confidence, Referable DR flag ($\ge \text{Level 2}$) |
+| **DR Severity Grading** | Hybrid Ensemble Model (Deep Learning 5-Class Classifier) | $300 \times 300 \times 3$ | Level 0–4 Severity Grade, Softmax Logits, Calibrated Confidence, Referable DR flag ($\ge \text{Level 2}$) |
 | **Vessel Segmentation** | U-Net with ResNet-34 Encoder (`segmentation_models_pytorch`) | $512 \times 512 \times 3$ | Binary Microvascular Mask, Vascular Density Percentage ($\%$) |
 | **Optic Disc & Fovea Localization** | Dual-Channel Heatmap ResUNet (ResNet-18 Encoder) | $512 \times 512 \times 3$ | Optic Disc $(X, Y)$ & Confidence, Fovea $(X, Y)$ & Confidence, Anatomical Distance |
 | **Lesion Profiling** | Multi-Head Segmentation Ensemble | $512 \times 512 \times 3$ | Microaneurysms, Hemorrhages, Hard Exudates, Neovascularization Detection & Counts |
 | **Visual Explainability** | Layer-Hooked Gradient-Weighted Class Activation Mapping (Grad-CAM) | $300 \times 300 \times 3$ | Heatmap Blend (Alpha=0.4, Jet Colormap) reflecting model focus |
+| **Phase 6 MATLAB Biomarkers** | Morphological Skeletonization, Box-Counting & Graph Analysis | Vessel Mask + Centroids | Fractal Dimension ($D_f$), Tortuosity ($\tau_d, \tau_c$), Branch Counts ($N_{\text{branch}}, N_{\text{zb}}$), CRAE, CRVE, AVR |
+| **Phase 7 Simulink Dynamics** | 3D Continuous-Time State-Space LTI Simulation (`ode4`, $\theta \in [0, 10]$) | Normalized Biomarker Vector $\mathbf{u}$ | Structural State $x_1(\theta)$, Tortuosity State $x_2(\theta)$, Vascular Bed State $x_3(\theta)$, Composite $S_{\text{composite}}$ |
 | **Longitudinal Progression** | Retinal Landmark Alignment & Delta Classifier | Sequential Pairs | Longitudinal Progression Status (`Stable`, `Worsening`, `Improvement`), Biomarker Shift Deltas ($\Delta$) |
 
 ---
@@ -318,40 +332,44 @@ SIH2026/Complete Project/
 ├── Backend/
 │   └── retinaai-backend/
 │       ├── api/                        # FastAPI Route Handlers
-│       │   ├── analysis.py             # Image analysis execution & status
+│       │   ├── analysis.py             # Image analysis execution, concurrent eyes & status
 │       │   ├── analytics.py            # Clinical screening metrics & aggregates
 │       │   ├── auth.py                 # JWT token generation & user profile
 │       │   ├── longitudinal.py         # Longitudinal comparison & timeline API
 │       │   ├── patients.py             # Patient CRUD & directory search
 │       │   ├── reports.py              # PDF compilation & download endpoints
 │       │   ├── review.py               # Ophthalmologist triage queue & submit
-│       │   └── screenings.py           # Screening session lifecycle & uploads
+│       │   └── screenings.py           # Screening session lifecycle, uploads & simulations
 │       ├── core/                       # Security, JWT, & Dependency Injection
 │       │   ├── dependencies.py         # Role verification (require_doctor, get_db)
 │       │   └── security.py             # Bcrypt hashing & token validation
 │       ├── database/                   # ORM Database Layer
 │       │   ├── db.py                   # Engine initialization & session factory
-│       │   ├── models.py               # SQLAlchemy models (User, Patient, Screening, etc.)
+│       │   ├── models.py               # SQLAlchemy models (User, Patient, Screening, Simulation)
 │       │   └── seed.py                 # Database initialization & default fixtures
 │       ├── models_loader/              # PyTorch Model Checkpoint Loaders
 │       │   └── loaders.py              # Eager model loading & memory staging
 │       ├── schemas/                    # Pydantic Request & Response Schemas
 │       ├── services/                   # Core Business Logic & AI Services
 │       │   ├── calibration_service.py  # Temperature scaling probability calibrator
-│       │   ├── dr_service.py           # EfficientNet-B2 DR inference service
+│       │   ├── dr_service.py           # Hybrid Ensemble Model DR inference service
 │       │   ├── enhancement_service.py  # Adaptive CLAHE & bilateral filtering
 │       │   ├── gradcam_service.py      # Grad-CAM attention heatmap generator
 │       │   ├── lesion_service.py       # Multi-head lesion segmentation ensemble
 │       │   ├── longitudinal_service.py # Retinal alignment & progression analysis
+│       │   ├── matlab_service.py       # Persistent headless MATLAB engine biomarker runner
 │       │   ├── od_fovea_service.py     # ResUNet anatomical landmark detector
-│       │   ├── pipeline_service.py     # ThreadPoolExecutor parallel pipeline
+│       │   ├── pipeline_service.py     # Parallel multimodal execution pipeline
 │       │   ├── quality_service.py      # 3-tier image quality assessment
 │       │   ├── report_service.py       # Clinical ReportLab PDF generator
+│       │   ├── simulink_service.py     # Simulink state-space dynamic model executor
+│       │   ├── storage_service.py      # Private Supabase Storage & local fallback engine
 │       │   └── vessel_service.py       # U-Net vessel segmentation & density
-│       ├── static/                     # Persistent Static Assets
+│       ├── static/                     # Persistent Local Static Assets
 │       │   ├── uploads/                # Ingested raw fundus images
-│       │   └── results/                # Visual artifacts (Grad-CAM, masks, overlays)
-│       ├── config.py                   # Environment settings & model paths
+│       │   ├── results/                # Visual artifacts (Grad-CAM, masks, overlays)
+│       │   └── reports/                # Generated clinical diagnostic PDFs
+│       ├── config.py                   # Environment settings, Supabase, & model paths
 │       ├── main.py                     # FastAPI lifespan application entrypoint
 │       ├── requirements.txt            # Python dependencies
 │       └── .env.example                # Backend environment template
@@ -368,6 +386,7 @@ SIH2026/Complete Project/
 │       │   │   ├── ODFoveaMarker.tsx   # Centroid coordinate overlay
 │       │   │   ├── ProtectedRoute.tsx  # Role-based route guard
 │       │   │   ├── RecaptureAlert.tsx  # Visual IQA rejection warning card
+│       │   │   ├── RetinalSimulationCard.tsx # Compact state-space trajectory card
 │       │   │   ├── ReviewQueueTable.tsx# Triage ledger with severity sorting
 │       │   │   └── VesselOverlay.tsx   # Microvascular mask visualizer
 │       │   ├── contexts/               # React Context Providers
@@ -384,7 +403,8 @@ SIH2026/Complete Project/
 │       │   │   ├── LongitudinalPage.tsx# Pairwise examination comparison
 │       │   │   ├── NewScreeningPage.tsx# Patient intake & screening initiation
 │       │   │   ├── PatientDetailPage.tsx# Comprehensive patient EHR profile
-│       │   │   ├── PatientLongitudinalHistoryPage.tsx # Trajectory graph & unified comparison
+│       │   │   ├── PatientLongitudinalHistoryPage.tsx # Trajectory graph & comparison
+│       │   │   ├── PatientSimulationPage.tsx # Interactive Simulink 3D state dynamics
 │       │   │   ├── PatientsPage.tsx    # Patient directory & searchable registry
 │       │   │   ├── QualityPage.tsx     # Visual IQA feedback & recapture page
 │       │   │   ├── ReportPage.tsx      # Embedded clinical report viewer
@@ -404,8 +424,14 @@ SIH2026/Complete Project/
 │       ├── vite.config.ts              # Vite bundling & development server setup
 │       └── .env.example                # Frontend environment template
 │
+├── MATLAB/                             # MATLAB Biomarkers & Simulink Computational Modeling
+│   ├── retina_biomarkers.m             # Phase 6 quantitative morphological & vascular indices
+│   ├── retina_computational_state.slx  # Phase 7 continuous-time 3D state-space LTI model
+│   ├── build_retina_simulink_model.m   # Programmatic Simulink model generator
+│   └── test_*.m                        # Standalone verification suites
+│
 ├── Models/                             # Canonical Model Weights & Checkpoints
-│   ├── dr_grade/                       # EfficientNet-B2 (5 Classes: Levels 0-4)
+│   ├── dr_grade/                       # Hybrid Ensemble Model (5 Classes: Levels 0-4)
 │   │   ├── best_efficientnet_b2.pth    # Primary model weights
 │   │   ├── final_deployment_bundle.pth # Deployment bundle
 │   │   └── normalization_stats.json    # Dataset mean & std stats
@@ -449,13 +475,22 @@ Create `.env` in `Backend/retinaai-backend/` based on `.env.example`:
 
 ```env
 # --- Application & Network ---
-ENV=development
+ENVIRONMENT=development
 PORT=8000
+CORS_ALLOWED_ORIGINS=http://localhost:5173,http://localhost:3000
 
 # --- Database Storage ---
-# Use PostgreSQL in production or SQLite for quick local trials
-DATABASE_URL=sqlite:///./retinaai.db
-# DATABASE_URL=postgresql://postgres:password@localhost:5432/retinaai
+# Use Supabase PostgreSQL or local PostgreSQL:
+DATABASE_URL=postgresql://postgres:password@localhost:5432/retinaai
+# (SQLite fallback is automatically supported if PostgreSQL is unavailable)
+
+# --- Supabase Private Storage (Cloud Clinical Media) ---
+SUPABASE_URL=https://your-project-ref.supabase.co
+SUPABASE_ANON_KEY=your-supabase-anon-key
+SUPABASE_SERVICE_ROLE_KEY=your-supabase-service-role-key
+STORAGE_BUCKET_UPLOADS=retina-uploads
+STORAGE_BUCKET_RESULTS=retina-results
+STORAGE_BUCKET_REPORTS=retina-reports
 
 # --- Authentication & JWT Security ---
 JWT_SECRET_KEY=clinical-grade-super-secret-key-change-in-production-2026
@@ -469,7 +504,15 @@ VESSEL_MODEL_PATH=D:/SIH2026/Complete Project/Models/vessel_extraction/Vessel_Mo
 OD_FOVEA_MODEL_PATH=D:/SIH2026/Complete Project/Models/od_fovea_localization/best_fundus_localization_model.pth
 LESION_MODEL_PATH=D:/SIH2026/Complete Project/Models/lesion_segmentation/fundus_ensemble_bundle.pth
 
-# --- Storage Paths ---
+# --- MATLAB & Simulink Computational Subsystems ---
+ENABLE_MATLAB_BIOMARKERS=true
+ENABLE_SIMULINK=true
+MATLAB_SCRIPTS_PATH=D:/SIH2026/Complete Project/MATLAB
+MATLAB_TIMEOUT_SECONDS=60
+SIMULINK_TIMEOUT_SECONDS=30
+
+# --- Local Fallback & Disk Storage Paths ---
+STATIC_DIR=static
 UPLOAD_DIR=static/uploads
 RESULT_DIR=static/results
 MAX_UPLOAD_MB=20
@@ -778,7 +821,3 @@ Distributed under the **MIT License**. See `LICENSE` for more information.
 <div align="center">
   <sub>Engineered with precision for automated diabetic blindness prevention and tele-ophthalmology triage.</sub>
 </div>
-
-=======
-# Diabetic-Retinopathy
-AI-powered diabetic retinopathy screening and telemedicine platform with retinal image quality assessment, DR grading, explainable AI, retinal analysis, and longitudinal patient monitoring.
