@@ -143,3 +143,4 @@ export function SkeletonLine({ width = '100%', height = 14 }: { width?: string |
 export function SkeletonRecentTable({ rows = 5 }: { rows?: number }) {
   return <SkeletonTable rows={rows} cols={6} />;
 }
+

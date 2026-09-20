@@ -19,25 +19,34 @@ export function AuthenticatedImg({
 
   // Derive direct authenticated URL if it is a protected media route
   const getDirectAuthenticatedUrl = (rawSrc?: string): string | undefined => {
-    if (!rawSrc || rawSrc === fallback || rawSrc.startsWith('data:') || rawSrc.startsWith('blob:')) {
+    if (!rawSrc || rawSrc.startsWith('data:') || rawSrc.startsWith('blob:')) {
       return rawSrc;
     }
+
+    let clean = rawSrc.replace(/\\/g, '/');
+    const staticIdx = clean.indexOf('static/');
+    if (staticIdx !== -1) {
+      clean = `/api/media/${clean.slice(staticIdx + 7).replace(/^\/+/, '')}`;
+    }
+
     // Remote URLs that are not /api/media/ (e.g. Supabase signed URLs) can be fetched directly
-    if ((rawSrc.startsWith('http://') || rawSrc.startsWith('https://')) && !rawSrc.includes('/api/media/')) {
-      return rawSrc;
+    if ((clean.startsWith('http://') || clean.startsWith('https://')) && !clean.includes('/api/media/')) {
+      return clean;
     }
+
     // Append token query parameter for protected media
     const token = typeof window !== 'undefined' ? localStorage.getItem('retinaai_token') : null;
-    if (token && (rawSrc.includes('/api/media/') || rawSrc.startsWith('/api/') || !rawSrc.startsWith('http'))) {
-      if (!rawSrc.includes('token=')) {
-        const sep = rawSrc.includes('?') ? '&' : '?';
-        return `${rawSrc}${sep}token=${encodeURIComponent(token)}`;
+    if (token && (clean.includes('/api/media/') || clean.startsWith('/api/') || !clean.startsWith('http'))) {
+      if (!clean.includes('token=')) {
+        const sep = clean.includes('?') ? '&' : '?';
+        return `${clean}${sep}token=${encodeURIComponent(token)}`;
       }
     }
-    return rawSrc;
+    return clean;
   };
 
   const authenticatedUrl = getDirectAuthenticatedUrl(src);
+  const authenticatedFallback = getDirectAuthenticatedUrl(fallback);
 
   useEffect(() => {
     setHasError(false);
@@ -83,10 +92,10 @@ export function AuthenticatedImg({
 
   // Determine what image source to render safely
   const effectiveSrc = hasError
-    ? fallback
+    ? (authenticatedFallback || fallback)
     : blobUrl
     ? blobUrl
-    : (authenticatedUrl || fallback);
+    : (authenticatedUrl || authenticatedFallback || fallback);
 
   return (
     <img

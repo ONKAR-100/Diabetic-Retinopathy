@@ -18,12 +18,19 @@ import { AuthenticatedImg } from '../components/AuthenticatedImg';
 const BACKEND = BACKEND_URL;
 const pathToUrl = (path: string | null | undefined, fallback = '/retina.svg'): string => {
   if (!path) return fallback;
-  if (path.startsWith('http://') || path.startsWith('https://') || path.startsWith('blob:')) return path;
+  if (path.startsWith('data:') || path.startsWith('blob:')) return path;
+
   const normalized = path.replace(/\\/g, '/');
   const staticIdx = normalized.indexOf('static/');
   if (staticIdx !== -1) {
-    return `${BACKEND}/api/media/${normalized.slice(staticIdx + 7)}`;
+    const rel = normalized.slice(staticIdx + 7).replace(/^\/+/, '');
+    return `${BACKEND}/api/media/${rel}`;
   }
+
+  if ((normalized.startsWith('http://') || normalized.startsWith('https://')) && !normalized.includes('/api/media/')) {
+    return normalized;
+  }
+
   if (normalized.startsWith('/api/media/')) {
     return `${BACKEND}${normalized}`;
   }

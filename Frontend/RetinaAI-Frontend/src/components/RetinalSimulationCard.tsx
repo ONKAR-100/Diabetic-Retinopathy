@@ -7,6 +7,12 @@ import {
 import { getPatientSimulations, simulateScreening, extractSimulationsList } from '../services/simulation';
 import { SimulationItem } from '../types/simulation';
 
+const safeFixed = (val: any, decimals = 4, fallback = '--'): string => {
+  if (val === undefined || val === null) return fallback;
+  const num = typeof val === 'number' ? val : parseFloat(String(val));
+  return !isNaN(num) ? num.toFixed(decimals) : fallback;
+};
+
 interface RetinalSimulationCardProps {
   patientId: string;
   screenings?: any[];
@@ -248,28 +254,28 @@ export default function RetinalSimulationCard({ patientId, screenings = [] }: Re
             <div style={{ background: '#f4f8f7', padding: '10px 12px', borderRadius: 10 }}>
               <span style={{ fontSize: 10.5, color: '#688285', display: 'block' }}>Structural Complexity</span>
               <strong style={{ fontFamily: 'var(--font-mono)', fontSize: 15, color: '#0e6264' }}>
-                {activeSimulation.output_state.structural_complexity_state.toFixed(4)}
+                {safeFixed(activeSimulation.output_state?.structural_complexity_state, 4)}
               </strong>
             </div>
 
             <div style={{ background: '#f4f8f7', padding: '10px 12px', borderRadius: 10 }}>
               <span style={{ fontSize: 10.5, color: '#688285', display: 'block' }}>Tortuosity State</span>
               <strong style={{ fontFamily: 'var(--font-mono)', fontSize: 15, color: '#d97706' }}>
-                {activeSimulation.output_state.tortuosity_computational_state.toFixed(4)}
+                {safeFixed(activeSimulation.output_state?.tortuosity_computational_state, 4)}
               </strong>
             </div>
 
             <div style={{ background: '#f4f8f7', padding: '10px 12px', borderRadius: 10 }}>
               <span style={{ fontSize: 10.5, color: '#688285', display: 'block' }}>Vascular Bed Density</span>
               <strong style={{ fontFamily: 'var(--font-mono)', fontSize: 15, color: '#2563eb' }}>
-                {activeSimulation.output_state.vascular_bed_density_state.toFixed(4)}
+                {safeFixed(activeSimulation.output_state?.vascular_bed_density_state, 4)}
               </strong>
             </div>
 
             <div style={{ background: '#eff6ff', border: '1px solid #dbeafe', padding: '10px 12px', borderRadius: 10 }}>
               <span style={{ fontSize: 10.5, color: '#3b82f6', display: 'block', fontWeight: 600 }}>Composite State</span>
               <strong style={{ fontFamily: 'var(--font-mono)', fontSize: 15, color: '#1d4ed8' }}>
-                {activeSimulation.output_state.composite_retinal_computational_state.toFixed(4)}
+                {safeFixed(activeSimulation.output_state?.composite_retinal_computational_state, 4)}
               </strong>
             </div>
           </div>

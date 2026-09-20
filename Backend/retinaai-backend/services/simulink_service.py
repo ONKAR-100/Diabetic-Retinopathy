@@ -118,14 +118,19 @@ def normalize_contract_v1(raw_inputs: Dict[str, Any]) -> Tuple[Dict[str, float],
     u_df_star = w_fit * u_df_raw + (1.0 - w_fit) * 0.50
 
     normalized_inputs = {
+        "normalization_version": "1.0.0",
         "u_dens": round(u_dens, 6),
         "u_branch": round(u_branch, 6),
         "u_zb": round(u_zb, 6),
         "u_taud": round(u_taud, 6),
+        "u_tau_d": round(u_taud, 6),       # alias for frontend TypeScript contract
         "u_tauc": round(u_tauc, 6),
+        "u_tau_c": round(u_tauc, 6),       # alias for frontend TypeScript contract
         "u_df_raw": round(u_df_raw, 6),
+        "u_Df_raw": round(u_df_raw, 6),    # alias for frontend contract
         "w_fit": round(w_fit, 6),
         "u_df_star": round(u_df_star, 6),
+        "u_Df_star": round(u_df_star, 6),  # alias for frontend TypeScript contract
     }
 
     return raw_snapshot, normalized_inputs

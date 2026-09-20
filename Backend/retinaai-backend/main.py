@@ -46,6 +46,9 @@ def get_media_file(
     Adds 1-hour browser cache headers so images are served from disk on repeat visits.
     """
     clean = file_path.replace("\\", "/").lstrip("/")
+    if "static/" in clean:
+        clean = clean.split("static/", 1)[1].lstrip("/")
+
     parts = [p for p in clean.split("/") if p and p != "."]
     if any(p == ".." for p in parts):
         raise HTTPException(status_code=400, detail="Invalid path traversal sequence")
@@ -58,7 +61,24 @@ def get_media_file(
         raise HTTPException(status_code=403, detail="Access denied: path outside static directory")
 
     if not os.path.isfile(target_path):
-        raise HTTPException(status_code=404, detail="Media file not found")
+        # On-demand fallback: attempt to download from Supabase Storage if missing locally
+        from services.storage_service import storage_service
+        downloaded = False
+        rel_clean = "/".join(parts)
+        for bucket in [settings.STORAGE_BUCKET_RESULTS, settings.STORAGE_BUCKET_UPLOADS, settings.STORAGE_BUCKET_REPORTS]:
+            try:
+                data = storage_service.download_bytes(bucket, rel_clean)
+                if data:
+                    os.makedirs(os.path.dirname(target_path), exist_ok=True)
+                    with open(target_path, "wb") as f:
+                        f.write(data)
+                    downloaded = True
+                    break
+            except Exception:
+                pass
+
+        if not downloaded and not os.path.isfile(target_path):
+            raise HTTPException(status_code=404, detail="Media file not found")
 
     ext = os.path.splitext(target_path)[-1].lower()
     media_types = {

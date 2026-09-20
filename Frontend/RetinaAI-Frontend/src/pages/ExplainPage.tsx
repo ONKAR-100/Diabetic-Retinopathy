@@ -26,6 +26,13 @@ const pathToUrl = (path: string | null | undefined, fallback = '/retina.svg'): s
   // Normalize backslashes to forward slashes
   const normalized = path.replace(/\\/g, '/');
 
+  // If it contains "static/" anywhere, strip everything before it and use /api/media/
+  const staticIdx = normalized.indexOf('static/');
+  if (staticIdx !== -1) {
+    const rel = normalized.slice(staticIdx + 'static/'.length).replace(/^\/+/, '');
+    return `${BACKEND}/api/media/${rel}`;
+  }
+
   // If it contains "api/media/", preserve it
   if (normalized.includes('/api/media/')) {
     const idx = normalized.indexOf('/api/media/');
@@ -33,13 +40,6 @@ const pathToUrl = (path: string | null | undefined, fallback = '/retina.svg'): s
   }
   if (normalized.startsWith('api/media/')) {
     return `${BACKEND}/${normalized}`;
-  }
-
-  // If it contains "static/" anywhere, strip it and use /api/media
-  const staticIdx = normalized.indexOf('static/');
-  if (staticIdx !== -1) {
-    const rel = normalized.slice(staticIdx + 'static/'.length);
-    return `${BACKEND}/api/media/${rel}`;
   }
 
   const clean = normalized.startsWith('/') ? normalized : `/${normalized}`;

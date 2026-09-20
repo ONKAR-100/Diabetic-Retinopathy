@@ -146,8 +146,11 @@ class StorageService:
         """
         self._init()
 
+        # Always persist a local copy in static/ so local fallback and /api/media/ never 404
+        local_fallback_url = self._local_fallback_bytes(data, path)
+
         if self._client is None:
-            return self._local_fallback_bytes(data, path)
+            return local_fallback_url
 
         try:
             # Upsert so re-uploads don't fail
@@ -161,7 +164,7 @@ class StorageService:
             return signed_url
         except Exception as exc:
             logger.error(f"Supabase upload failed for {bucket}/{path}: {exc}")
-            return self._local_fallback_bytes(data, path)
+            return local_fallback_url
 
     # ── Convenience wrappers ─────────────────────────────────────────────────
     def upload_cv2_image(
@@ -237,9 +240,7 @@ class StorageService:
                     return res
             except Exception as exc:
                 logger.warning(f"Failed to create signed URL for {bucket}/{clean}: {exc}")
-                fallback = f"/api/media/{clean}"
-                self._signed_url_cache[cache_key] = (fallback, now + 30.0)
-                return fallback
+                return f"/api/media/{clean}"
 
         # Local fallback
         return f"/api/media/{clean}"
@@ -332,16 +333,27 @@ class StorageService:
                 obj_path = clean.split("results/")[-1].lstrip("/")
                 return self.get_signed_url(settings.STORAGE_BUCKET_RESULTS, obj_path, expires_in)
 
-        # 3. Local media paths
+        # 3. Local media paths and filesystem paths
+        # Normalize and strip any "static/" occurrence from absolute/relative paths
+        if "/static/" in clean:
+            rel = clean.split("/static/", 1)[1].lstrip("/")
+            return f"/api/media/{rel}"
+        if "static/" in clean:
+            rel = clean.split("static/", 1)[1].lstrip("/")
+            return f"/api/media/{rel}"
+
         if clean.startswith("/api/media/"):
             return clean
+        if clean.startswith("api/media/"):
+            return f"/{clean}"
 
-        if clean.startswith("/static/"):
-            rel = clean[len("/static/"):]
-            return f"/api/media/{rel}"
-        if clean.startswith("static/"):
-            rel = clean[len("static/"):]
-            return f"/api/media/{rel}"
+        # If it looks like a Windows drive path or absolute path (e.g. D:/... or /...)
+        if ":" in clean or clean.startswith("/"):
+            parts = clean.split("/")
+            for seg in ["uploads", "results", "reports"]:
+                if seg in parts:
+                    idx = parts.index(seg)
+                    return f"/api/media/{'/'.join(parts[idx:])}"
 
         # Relative path inside STATIC_DIR (e.g. uploads/... or results/...)
         return f"/api/media/{clean.lstrip('/')}"

@@ -12,6 +12,13 @@ import {
 import { getPatient } from '../services/patients';
 import { getPatientSimulations, simulateScreening, extractSimulationsList } from '../services/simulation';
 import { SimulationItem } from '../types/simulation';
+import { ErrorBoundary } from '../components/ErrorBoundary';
+
+const safeFixed = (val: any, decimals = 4, fallback = '--'): string => {
+  if (val === undefined || val === null) return fallback;
+  const num = typeof val === 'number' ? val : parseFloat(String(val));
+  return !isNaN(num) ? num.toFixed(decimals) : fallback;
+};
 
 export default function PatientSimulationPage() {
   const { id } = useParams<{ id: string }>();
@@ -82,20 +89,24 @@ export default function PatientSimulationPage() {
     const tortArr = traj.tortuosity_curve || traj.tortuosity || [];
     const densArr = traj.density_curve || traj.vascular_bed_density || [];
 
+    if (!Array.isArray(thetaArr) || thetaArr.length === 0) return [];
+
     return thetaArr.map((t, idx) => {
-      const c = compArr[idx] !== undefined ? Number(compArr[idx].toFixed(4)) : 0;
-      const tr = tortArr[idx] !== undefined ? Number(tortArr[idx].toFixed(4)) : 0;
-      const d = densArr[idx] !== undefined ? Number(densArr[idx].toFixed(4)) : 0;
+      const c = (compArr && compArr[idx] !== undefined) ? (typeof compArr[idx] === 'number' ? compArr[idx] : Number(compArr[idx]) || 0) : 0;
+      const tr = (tortArr && tortArr[idx] !== undefined) ? (typeof tortArr[idx] === 'number' ? tortArr[idx] : Number(tortArr[idx]) || 0) : 0;
+      const d = (densArr && densArr[idx] !== undefined) ? (typeof densArr[idx] === 'number' ? densArr[idx] : Number(densArr[idx]) || 0) : 0;
 
       // Exact Phase 7 Composite Formula:
       // S_composite = (1 / sqrt(3)) * sqrt(S_complexity^2 + S_tortuosity^2 + S_density^2), clamped to [0, 1]
       const compVal = Math.min(1.0, Math.max(0.0, (1.0 / Math.sqrt(3.0)) * Math.sqrt(c * c + tr * tr + d * d)));
 
+      const tNum = typeof t === 'number' ? t : Number(t) || idx * 0.1;
+
       return {
-        theta: Number(t.toFixed(2)),
-        structural_complexity: c,
-        tortuosity: tr,
-        vascular_bed_density: d,
+        theta: Number(tNum.toFixed(2)),
+        structural_complexity: Number(c.toFixed(4)),
+        tortuosity: Number(tr.toFixed(4)),
+        vascular_bed_density: Number(d.toFixed(4)),
         composite_state: Number(compVal.toFixed(4)),
       };
     });
@@ -126,7 +137,11 @@ export default function PatientSimulationPage() {
   const patientCode = patient?.patient_display_id || patient?.id || id || 'RTA';
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 24, maxWidth: 1240, margin: '0 auto', paddingBottom: 60 }}>
+    <ErrorBoundary
+      fallbackTitle="Simulation Workspace Notice"
+      fallbackMessage="An error occurred while loading or displaying the retinal state-space simulation. You can retry the simulation or return to the patient record."
+    >
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 24, maxWidth: 1240, margin: '0 auto', paddingBottom: 60 }}>
       {/* Top Header & Navigation */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 16 }}>
         <div>
@@ -379,7 +394,7 @@ export default function PatientSimulationPage() {
                 <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: '#0e6264', background: '#edf7f6', padding: '2px 6px', borderRadius: 4 }}>x₁(10)</span>
               </div>
               <div style={{ fontFamily: 'var(--font-mono)', fontSize: 28, fontWeight: 700, color: '#0e6264', margin: '6px 0 2px' }}>
-                {activeSimulation.output_state.structural_complexity_state.toFixed(4)}
+                {safeFixed(activeSimulation.output_state?.structural_complexity_state, 4)}
               </div>
               <span style={{ fontSize: 11, color: '#889ea0' }}>Inputs: Branch Count (50%) + D_f* (50%)</span>
             </div>
@@ -397,7 +412,7 @@ export default function PatientSimulationPage() {
                 <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: '#d97706', background: '#fef3c7', padding: '2px 6px', borderRadius: 4 }}>x₂(10)</span>
               </div>
               <div style={{ fontFamily: 'var(--font-mono)', fontSize: 28, fontWeight: 700, color: '#d97706', margin: '6px 0 2px' }}>
-                {activeSimulation.output_state.tortuosity_computational_state.toFixed(4)}
+                {safeFixed(activeSimulation.output_state?.tortuosity_computational_state, 4)}
               </div>
               <span style={{ fontSize: 11, color: '#889ea0' }}>Inputs: Distance τ_d (60%) + Curvature τ_c (40%)</span>
             </div>
@@ -415,7 +430,7 @@ export default function PatientSimulationPage() {
                 <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: '#2563eb', background: '#eff6ff', padding: '2px 6px', borderRadius: 4 }}>x₃(10)</span>
               </div>
               <div style={{ fontFamily: 'var(--font-mono)', fontSize: 28, fontWeight: 700, color: '#2563eb', margin: '6px 0 2px' }}>
-                {activeSimulation.output_state.vascular_bed_density_state.toFixed(4)}
+                {safeFixed(activeSimulation.output_state?.vascular_bed_density_state, 4)}
               </div>
               <span style={{ fontSize: 11, color: '#889ea0' }}>Inputs: Vessel Density (60%) + Zone B (40%)</span>
             </div>
@@ -433,7 +448,7 @@ export default function PatientSimulationPage() {
                 <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: '#4f46e5', background: '#eef2ff', padding: '2px 6px', borderRadius: 4 }}>S_comp*</span>
               </div>
               <div style={{ fontFamily: 'var(--font-mono)', fontSize: 28, fontWeight: 700, color: '#4338ca', margin: '6px 0 2px' }}>
-                {activeSimulation.output_state.composite_retinal_computational_state.toFixed(4)}
+                {safeFixed(activeSimulation.output_state?.composite_retinal_computational_state, 4)}
               </div>
               <span style={{ fontSize: 11, color: '#6366f1' }}>1/√3 · √(x₁² + x₂² + x₃²) in [0, 1]</span>
             </div>
@@ -611,7 +626,7 @@ export default function PatientSimulationPage() {
                   <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 12px', background: '#f8faf9', borderRadius: 8, fontSize: 12.5 }}>
                     <span style={{ color: '#557275' }}>Vessel Density (Vd)</span>
                     <strong style={{ fontFamily: 'var(--font-mono)', color: '#132b2e' }}>
-                      {activeSimulation.input_snapshot.vessel_density !== undefined ? Number(activeSimulation.input_snapshot.vessel_density).toFixed(4) : '--'}
+                      {safeFixed(activeSimulation.input_snapshot.vessel_density, 4)}
                     </strong>
                   </div>
 
@@ -632,28 +647,28 @@ export default function PatientSimulationPage() {
                   <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 12px', background: '#f8faf9', borderRadius: 8, fontSize: 12.5 }}>
                     <span style={{ color: '#557275' }}>Distance Tortuosity (τ_d)</span>
                     <strong style={{ fontFamily: 'var(--font-mono)', color: '#132b2e' }}>
-                      {activeSimulation.input_snapshot.distance_tortuosity !== undefined ? Number(activeSimulation.input_snapshot.distance_tortuosity).toFixed(4) : '--'}
+                      {safeFixed(activeSimulation.input_snapshot.distance_tortuosity, 4)}
                     </strong>
                   </div>
 
                   <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 12px', background: '#f8faf9', borderRadius: 8, fontSize: 12.5 }}>
                     <span style={{ color: '#557275' }}>Curvature Tortuosity (τ_c)</span>
                     <strong style={{ fontFamily: 'var(--font-mono)', color: '#132b2e' }}>
-                      {activeSimulation.input_snapshot.curvature_tortuosity !== undefined ? Number(activeSimulation.input_snapshot.curvature_tortuosity).toFixed(4) : '--'}
+                      {safeFixed(activeSimulation.input_snapshot.curvature_tortuosity, 4)}
                     </strong>
                   </div>
 
                   <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 12px', background: '#f8faf9', borderRadius: 8, fontSize: 12.5 }}>
                     <span style={{ color: '#557275' }}>Fractal Dimension (Df)</span>
                     <strong style={{ fontFamily: 'var(--font-mono)', color: '#132b2e' }}>
-                      {activeSimulation.input_snapshot.fractal_dimension !== undefined ? Number(activeSimulation.input_snapshot.fractal_dimension).toFixed(4) : '--'}
+                      {safeFixed(activeSimulation.input_snapshot.fractal_dimension, 4)}
                     </strong>
                   </div>
 
                   <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 12px', background: '#f8faf9', borderRadius: 8, fontSize: 12.5 }}>
                     <span style={{ color: '#557275' }}>Fractal Fit Linearity (R²)</span>
                     <strong style={{ fontFamily: 'var(--font-mono)', color: '#132b2e' }}>
-                      {activeSimulation.input_snapshot.fractal_r_squared !== undefined ? Number(activeSimulation.input_snapshot.fractal_r_squared).toFixed(4) : '--'}
+                      {safeFixed(activeSimulation.input_snapshot.fractal_r_squared, 4)}
                     </strong>
                   </div>
                 </div>
@@ -700,49 +715,49 @@ export default function PatientSimulationPage() {
                   <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 12px', background: '#f8faf9', borderRadius: 8, fontSize: 12.5 }}>
                     <span style={{ color: '#557275' }}>u_dens = clamp(Vd / 0.20, 0, 1)</span>
                     <strong style={{ fontFamily: 'var(--font-mono)', color: '#0e6264' }}>
-                      {activeSimulation.normalized_inputs.u_dens.toFixed(6)}
+                      {safeFixed(activeSimulation.normalized_inputs.u_dens, 6)}
                     </strong>
                   </div>
 
                   <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 12px', background: '#f8faf9', borderRadius: 8, fontSize: 12.5 }}>
                     <span style={{ color: '#557275' }}>u_branch = clamp(N_branch / 500, 0, 1)</span>
                     <strong style={{ fontFamily: 'var(--font-mono)', color: '#0e6264' }}>
-                      {activeSimulation.normalized_inputs.u_branch.toFixed(6)}
+                      {safeFixed(activeSimulation.normalized_inputs.u_branch, 6)}
                     </strong>
                   </div>
 
                   <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 12px', background: '#f8faf9', borderRadius: 8, fontSize: 12.5 }}>
                     <span style={{ color: '#557275' }}>u_zb = clamp(N_zb / 30, 0, 1)</span>
                     <strong style={{ fontFamily: 'var(--font-mono)', color: '#0e6264' }}>
-                      {activeSimulation.normalized_inputs.u_zb.toFixed(6)}
+                      {safeFixed(activeSimulation.normalized_inputs.u_zb, 6)}
                     </strong>
                   </div>
 
                   <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 12px', background: '#f8faf9', borderRadius: 8, fontSize: 12.5 }}>
                     <span style={{ color: '#557275' }}>u_tau_d = clamp(τ_d / 0.04, 0, 1)</span>
                     <strong style={{ fontFamily: 'var(--font-mono)', color: '#0e6264' }}>
-                      {activeSimulation.normalized_inputs.u_tau_d.toFixed(6)}
+                      {safeFixed(activeSimulation.normalized_inputs.u_tau_d ?? activeSimulation.normalized_inputs.u_taud, 6)}
                     </strong>
                   </div>
 
                   <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 12px', background: '#f8faf9', borderRadius: 8, fontSize: 12.5 }}>
                     <span style={{ color: '#557275' }}>u_tau_c = clamp(τ_c / 0.30, 0, 1)</span>
                     <strong style={{ fontFamily: 'var(--font-mono)', color: '#0e6264' }}>
-                      {activeSimulation.normalized_inputs.u_tau_c.toFixed(6)}
+                      {safeFixed(activeSimulation.normalized_inputs.u_tau_c ?? activeSimulation.normalized_inputs.u_tauc, 6)}
                     </strong>
                   </div>
 
                   <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 12px', background: '#f8faf9', borderRadius: 8, fontSize: 12.5 }}>
                     <span style={{ color: '#557275' }}>u_Df* (Reliability Weighted Df)</span>
                     <strong style={{ fontFamily: 'var(--font-mono)', color: '#0e6264' }}>
-                      {activeSimulation.normalized_inputs.u_Df_star.toFixed(6)}
+                      {safeFixed(activeSimulation.normalized_inputs.u_Df_star ?? activeSimulation.normalized_inputs.u_df_star, 6)}
                     </strong>
                   </div>
 
                   <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 12px', background: '#f4f8f7', borderRadius: 8, fontSize: 12.5 }}>
                     <span style={{ color: '#557275' }}>w_fit = clamp((R² - 0.90) / 0.10, 0, 1)</span>
                     <strong style={{ fontFamily: 'var(--font-mono)', color: '#507578' }}>
-                      {activeSimulation.normalized_inputs.w_fit.toFixed(4)}
+                      {safeFixed(activeSimulation.normalized_inputs.w_fit, 4)}
                     </strong>
                   </div>
                 </div>
@@ -889,6 +904,7 @@ export default function PatientSimulationPage() {
           </button>
         </div>
       )}
-    </div>
+      </div>
+    </ErrorBoundary>
   );
 }
