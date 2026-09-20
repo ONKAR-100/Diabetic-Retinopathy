@@ -14,10 +14,7 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
-def serialize_patient(p: Patient, db: Session, include_screenings: bool = False):
-    screenings = db.query(Screening).filter(Screening.patient_id == p.id).order_by(Screening.created_at.desc()).all()
-    latest_scr = screenings[0] if screenings else None
-    
+def _format_patient_dict(p: Patient, screenings: list, latest_scr, progression_status, include_screenings: bool = False):
     latest_screening_data = None
     if latest_scr:
         lg = latest_scr.left_dr_grade if latest_scr.left_dr_grade is not None else -1
@@ -66,28 +63,57 @@ def serialize_patient(p: Patient, db: Session, include_screenings: bool = False)
         "updated_at": p.updated_at.isoformat() if p.updated_at else None,
         "latest_screening": latest_screening_data,
         "screenings_count": len(screenings),
-        "progression_status": None  # Populated below if comparison exists
+        "progression_status": progression_status
     }
-
-    # Add latest progression status from longitudinal comparison
-    if latest_scr:
-        from database.models import LongitudinalComparison
-        latest_comp = db.query(LongitudinalComparison).filter(
-            LongitudinalComparison.current_screening_id == latest_scr.id
-        ).first()
-        if latest_comp:
-            data["progression_status"] = latest_comp.progression_status
 
     if include_screenings:
         data["screenings"] = [map_screening_to_response(s) for s in screenings]
         
     return data
 
+def serialize_patient(p: Patient, db: Session, include_screenings: bool = False):
+    screenings = db.query(Screening).filter(Screening.patient_id == p.id).order_by(Screening.created_at.desc()).all()
+    latest_scr = screenings[0] if screenings else None
+    progression_status = None
+    if latest_scr:
+        from database.models import LongitudinalComparison
+        latest_comp = db.query(LongitudinalComparison).filter(
+            LongitudinalComparison.current_screening_id == latest_scr.id
+        ).first()
+        if latest_comp:
+            progression_status = latest_comp.progression_status
+
+    return _format_patient_dict(p, screenings, latest_scr, progression_status, include_screenings)
+
 @router.get("", response_model=List[dict])
 @router.get("/", response_model=List[dict])
 def get_patients(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     pts = db.query(Patient).order_by(Patient.created_at.desc()).all()
-    return [serialize_patient(p, db, include_screenings=False) for p in pts]
+    if not pts:
+        return []
+
+    p_ids = [p.id for p in pts]
+    all_screenings = db.query(Screening).filter(Screening.patient_id.in_(p_ids)).order_by(Screening.created_at.desc()).all()
+    
+    screenings_map = {}
+    for s in all_screenings:
+        screenings_map.setdefault(s.patient_id, []).append(s)
+
+    latest_scr_ids = [scrs[0].id for scrs in screenings_map.values() if scrs]
+    comp_map = {}
+    if latest_scr_ids:
+        from database.models import LongitudinalComparison
+        comps = db.query(LongitudinalComparison).filter(LongitudinalComparison.current_screening_id.in_(latest_scr_ids)).all()
+        comp_map = {c.current_screening_id: c.progression_status for c in comps}
+
+    results = []
+    for p in pts:
+        p_scrs = screenings_map.get(p.id, [])
+        latest_scr = p_scrs[0] if p_scrs else None
+        prog_status = comp_map.get(latest_scr.id) if latest_scr else None
+        results.append(_format_patient_dict(p, p_scrs, latest_scr, prog_status, include_screenings=False))
+        
+    return results
 
 @router.get("/{id}", response_model=dict)
 def get_patient(id: str, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
