@@ -152,19 +152,26 @@ class StorageService:
         if self._client is None:
             return local_fallback_url
 
-        try:
-            # Upsert so re-uploads don't fail
-            self._client.storage.from_(bucket).upload(
-                path=path,
-                file=data,
-                file_options={"content-type": content_type, "upsert": "true"},
-            )
-            signed_url = self.get_signed_url(bucket, path)
-            logger.debug(f"Uploaded to Supabase private storage: {bucket}/{path}")
-            return signed_url
-        except Exception as exc:
-            logger.error(f"Supabase upload failed for {bucket}/{path}: {exc}")
-            return local_fallback_url
+        for attempt in range(2):
+            try:
+                # Upsert so re-uploads don't fail
+                self._client.storage.from_(bucket).upload(
+                    path=path,
+                    file=data,
+                    file_options={"content-type": content_type, "upsert": "true"},
+                )
+                signed_url = self.get_signed_url(bucket, path)
+                logger.debug(f"Uploaded to Supabase private storage: {bucket}/{path}")
+                return signed_url
+            except Exception as exc:
+                if attempt == 0 and "Server disconnected" in str(exc):
+                    # Stale keep-alive HTTP socket; reset client and retry once
+                    self._client = None
+                    self._init()
+                    if self._client is not None:
+                        continue
+                logger.error(f"Supabase upload failed for {bucket}/{path}: {exc}")
+                return local_fallback_url
 
     # ── Convenience wrappers ─────────────────────────────────────────────────
     def upload_cv2_image(
@@ -239,6 +246,22 @@ class StorageService:
                     self._signed_url_cache[cache_key] = (res, now + (expires_in * 0.8))
                     return res
             except Exception as exc:
+                if "Server disconnected" in str(exc):
+                    try:
+                        self._client = None
+                        self._init()
+                        if self._client is not None:
+                            res = self._client.storage.from_(bucket).create_signed_url(clean, expires_in)
+                            if isinstance(res, dict) or hasattr(res, "get"):
+                                signed = res.get("signedURL") or res.get("signedUrl") or res.get("url")
+                                if signed:
+                                    self._signed_url_cache[cache_key] = (signed, now + (expires_in * 0.8))
+                                    return signed
+                            elif isinstance(res, str):
+                                self._signed_url_cache[cache_key] = (res, now + (expires_in * 0.8))
+                                return res
+                    except Exception:
+                        pass
                 logger.warning(f"Failed to create signed URL for {bucket}/{clean}: {exc}")
                 return f"/api/media/{clean}"
 

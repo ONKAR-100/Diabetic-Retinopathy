@@ -28,6 +28,8 @@ export default function AnalyzePage() {
   const stageTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const navigatedRef = useRef(false);
   const unmountedRef = useRef(false);
+  const hasTriggeredRef = useRef<string | null>(null);
+  const isRunningRef = useRef(false);
 
   useEffect(() => {
     unmountedRef.current = false;
@@ -38,7 +40,9 @@ export default function AnalyzePage() {
   }, []);
 
   const runAnalysis = () => {
-    if (!screening.screeningId) return;
+    if (!screening.screeningId || isRunningRef.current) return;
+    isRunningRef.current = true;
+    hasTriggeredRef.current = screening.screeningId;
 
     // Reset states
     setActiveStageIndex(0);
@@ -118,11 +122,22 @@ export default function AnalyzePage() {
 
         setIsError(true);
         setErrorMessage(msg);
+      })
+      .finally(() => {
+        isRunningRef.current = false;
       });
   };
 
-  useEffect(() => {
+  const handleRetry = () => {
+    isRunningRef.current = false;
+    hasTriggeredRef.current = null;
     runAnalysis();
+  };
+
+  useEffect(() => {
+    if (screening.screeningId && hasTriggeredRef.current !== screening.screeningId) {
+      runAnalysis();
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [screening.screeningId]);
 
@@ -158,7 +173,7 @@ export default function AnalyzePage() {
           isError={isError}
           errorMessage={errorMessage}
           progressPercent={progressPercent}
-          onRetry={runAnalysis}
+          onRetry={handleRetry}
         />
       </div>
     </>
