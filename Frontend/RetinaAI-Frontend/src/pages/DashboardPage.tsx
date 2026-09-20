@@ -20,6 +20,7 @@ import { listScreenings, getScreening } from '../services/screenings';
 import { AnalyticsSummary, ScreeningResult } from '../types';
 import { ReviewQueueSection, QueueItem } from '../components/ReviewQueueSection';
 import { getReviewQueue } from '../services/review';
+import { SkeletonStatCards, SkeletonRecentTable } from '../components/SkeletonLoaders';
 
 export default function DashboardPage() {
   const { user, isDoctor } = useAuth();
@@ -192,12 +193,12 @@ export default function DashboardPage() {
 
   return (
     <>
-      {/* Greeting Section */}
+      {/* Greeting Section — always visible instantly */}
       <section className="greeting-section">
         <div>
           <div className="greeting-eyebrow">{todayDateStr}</div>
           <h1 className="greeting-title">Good morning, {reviewerName.replace(/\.+$/, '')}.</h1>
-          <p className="greeting-sub">Here’s the triage picture from Jorhat Community Clinic today.</p>
+          <p className="greeting-sub">Here's the triage picture from Jorhat Community Clinic today.</p>
         </div>
 
         <button 
@@ -210,7 +211,10 @@ export default function DashboardPage() {
         </button>
       </section>
 
-      {/* Summary Metric Cards */}
+      {/* Summary Metric Cards — skeleton while loading, real data when ready */}
+      {loading ? (
+        <SkeletonStatCards />
+      ) : (
       <section className="metrics-row-clinical">
         {/* Card 1 */}
         <div className="metric-card-clinical">
@@ -272,6 +276,7 @@ export default function DashboardPage() {
           <div className="metric-sub-display">Quality gate threshold</div>
         </div>
       </section>
+      )}
 
       {/* Main Content Row: Review Queue (Left) & Grade Distribution (Right) */}
       <section className="two-col-clinical">

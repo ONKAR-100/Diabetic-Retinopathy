@@ -43,6 +43,7 @@ def get_media_file(
     """
     Authenticated media gateway for local clinical images and artifacts.
     Strictly confines file resolution to settings.STATIC_DIR and prevents traversal.
+    Adds 1-hour browser cache headers so images are served from disk on repeat visits.
     """
     clean = file_path.replace("\\", "/").lstrip("/")
     parts = [p for p in clean.split("/") if p and p != "."]
@@ -67,7 +68,18 @@ def get_media_file(
         ".pdf": "application/pdf"
     }
     media_type = media_types.get(ext, "application/octet-stream")
-    return FileResponse(target_path, media_type=media_type)
+
+    # Build a deterministic ETag from file size + mtime so browsers validate cheaply
+    stat = os.stat(target_path)
+    etag = f'"{int(stat.st_mtime)}-{stat.st_size}"'
+
+    headers = {
+        # Clinical images never change once written — 1-hour public cache is safe
+        "Cache-Control": "private, max-age=3600, stale-while-revalidate=300",
+        "ETag": etag,
+    }
+    return FileResponse(target_path, media_type=media_type, headers=headers)
+
 
 # Include all routers
 app.include_router(auth.router, prefix="/api/auth", tags=["Auth"])

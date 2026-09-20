@@ -1,0 +1,972 @@
+SMART INDIA HACKATHON (SIH) 26038
+AUTOMATED DIABETIC RETINOPATHY SCREENING & TELEMEDICINE PLATFORM
+COMPLETE PROJECT MASTER SPECIFICATION
+
+======================================================================
+1. SIH PROBLEM STATEMENT
+======================================================================
+
+Problem Statement ID: SIH 26038
+
+Build an automated diabetic retinopathy (DR) screening and telemedicine
+workflow combining image quality assessment/enhancement, retinal
+structure and lesion analysis, DR severity grading, explainability,
+human-in-the-loop ophthalmologist validation, automated reporting, and
+Simulink-based workflow/resource simulation.
+
+The intended DR grading follows the International Clinical DR Severity
+Scale:
+
+Level 0 - No DR
+Level 1 - Mild NPDR
+Level 2 - Moderate NPDR
+Level 3 - Severe NPDR
+Level 4 - Proliferative DR
+
+Referable DR = Level 2 or higher.
+
+======================================================================
+2. SIH REQUIREMENTS
+======================================================================
+
+REQUIREMENT 1 - IMAGE QUALITY ASSESSMENT AND ENHANCEMENT
+- Assess focus/sharpness, illumination/brightness and field of view.
+- Identify good, borderline and ungradable images.
+- Apply adaptive enhancement to borderline images.
+- Use CLAHE, illumination normalization and denoising where required.
+- Reject images that remain ungradeable.
+- Give recapture feedback explaining the rejection reason.
+
+Current status:
+Quality assessment and enhancement already exist in the project.
+Frontend/backend integration must expose clear recapture feedback.
+
+REQUIREMENT 2 - RETINAL STRUCTURE AND LESION ANALYSIS
+- Optic disc localization.
+- Fovea localization.
+- Retinal vessel segmentation/extraction.
+- Microaneurysm detection/segmentation.
+- Exudate segmentation.
+- Hemorrhage classification/detection.
+- Neovascularization detection.
+
+Current status:
+Vessel extraction model: READY.
+Fovea localization: READY / BEING INTEGRATED.
+Lesion analysis: PLANNED FOR LATER.
+Optic disc functionality must be confirmed/added if not already available.
+
+REQUIREMENT 3 - DR SEVERITY GRADING
+- Five-class Level 0-4 grading.
+- Referable DR defined as Level 2+.
+- Target sensitivity >90% for referable DR.
+- Target specificity >85% for referable DR.
+- Validate using held-out evaluation data.
+
+Current status:
+EfficientNet-B2 DR grading model is READY.
+Referable threshold logic exists.
+Performance targets must be demonstrated before being claimed.
+
+REQUIREMENT 4 - EXPLAINABILITY
+- Grad-CAM attention maps.
+- Lesion-level evidence correlated with clinical criteria.
+- Calibrated confidence scores.
+- Automated annotated reports.
+- Ophthalmologist validation in a human-in-the-loop workflow.
+- Target validation/review time under 30 seconds.
+
+Current status:
+Grad-CAM is READY.
+Grad-CAM is model explainability, NOT lesion segmentation.
+Lesion-level evidence requires dedicated lesion models.
+Confidence calibration, report integration and measured usability
+validation still need to be completed.
+
+REQUIREMENT 5 - SIMULINK TELEMEDICINE WORKFLOW
+Model:
+- Image/patient acquisition rates.
+- Network bandwidth.
+- Processing throughput.
+- Review capacity.
+- Queues and delays.
+- Resource utilization.
+- District-level scaling.
+
+Demonstrate a workflow capable of serving 100,000+ patients/year.
+
+The AI does NOT need to be rewritten in MATLAB. Python/PyTorch can remain
+the AI layer while MATLAB/Simulink models the system-level workflow.
+
+======================================================================
+3. PROJECT OBJECTIVE
+======================================================================
+
+Create an AI-assisted diabetic retinopathy screening and telemedicine
+decision-support platform that:
+
+1. Accepts a fundus photograph.
+2. Assesses image quality.
+3. Enhances borderline images.
+4. Rejects ungradeable images with recapture guidance.
+5. Grades DR from Level 0-4.
+6. Determines referable DR.
+7. Generates Grad-CAM explainability.
+8. Extracts retinal vessels.
+9. Localizes the fovea.
+10. Localizes the optic disc when available.
+11. Adds lesion analysis later.
+12. Produces calibrated confidence.
+13. Routes referable/uncertain cases to ophthalmologists.
+14. Generates an annotated clinical report.
+15. Stores screening history.
+16. Simulates district-scale telemedicine capacity in Simulink.
+
+======================================================================
+4. COMPLETE END-TO-END WORKFLOW
+======================================================================
+
+USER / SCREENING CENTER
+        |
+        v
+IMAGE ACQUISITION
+        |
+        v
+IMAGE VALIDATION
+        |
+        v
+IMAGE QUALITY ASSESSMENT
+        |
+        +--------------------------+
+        |                          |
+   UNGRADABLE                 ACCEPTABLE /
+        |                     BORDERLINE
+        v                          |
+RECAPTURE FEEDBACK                 v
+                              ENHANCEMENT
+                                   |
+                                   v
+                            QUALITY REASSESSMENT
+                                   |
+                            +------+------+
+                            |             |
+                         ACCEPT         REJECT
+                            |             |
+                            |        RECAPTURE
+                            |
+                            v
+                       AI ANALYSIS
+                            |
+          +-----------------+-----------------+
+          |                 |                 |
+          v                 v                 v
+      DR GRADING         VESSELS            FOVEA
+          |                 |                 |
+          v                 v                 v
+       Grade 0-4        Vessel Map       Fovea Point
+          |
+          v
+       Grad-CAM
+          |
+          v
+   LESION ANALYSIS (FUTURE)
+          |
+          v
+   EVIDENCE AGGREGATION
+          |
+          v
+   CONFIDENCE CALIBRATION
+          |
+          v
+   REFERABLE DECISION
+          |
+       +--+--+
+       |     |
+       v     v
+   ROUTINE  REVIEW QUEUE
+               |
+               v
+        OPHTHALMOLOGIST
+               |
+          CONFIRM/MODIFY
+               |
+               v
+          FINAL RESULT
+               |
+               v
+       AUTOMATED REPORT
+               |
+               v
+       HISTORY / DATABASE
+
+======================================================================
+5. IMAGE QUALITY AND ENHANCEMENT
+======================================================================
+
+Quality engine evaluates:
+- Brightness/illumination.
+- Contrast.
+- Focus/sharpness.
+- Field of view.
+- Overall quality.
+
+Typical workflow:
+GOOD -> continue.
+BORDERLINE -> enhance -> reassess -> continue/reject.
+UNGRADABLE -> stop AI -> explain reason -> request recapture.
+
+Possible recapture messages:
+- Image too dark.
+- Image overexposed.
+- Insufficient field of view.
+- Image not sufficiently focused.
+- Retinal region not adequately visible.
+
+Enhancement pipeline can include:
+Original -> retinal ROI -> illumination correction ->
+LAB CLAHE -> denoising if needed -> resize/normalization ->
+enhanced image -> quality reassessment.
+
+======================================================================
+6. DR GRADING
+======================================================================
+
+Current model:
+EfficientNet-B2 five-class classifier.
+
+Outputs:
+Grade 0 - No DR
+Grade 1 - Mild NPDR
+Grade 2 - Moderate NPDR
+Grade 3 - Severe NPDR
+Grade 4 - Proliferative DR
+
+The result page should show:
+- Predicted grade.
+- Grade description.
+- Class probabilities.
+- Confidence.
+- Referable status.
+
+Referable rule:
+Grade 0-1 = Non-referable.
+Grade 2-4 = Referable.
+
+Five-class prediction and binary referable decision should be displayed
+as separate pieces of information.
+
+======================================================================
+7. VESSEL EXTRACTION
+======================================================================
+
+Current vessel extraction model: READY.
+
+Purpose:
+- Extract retinal blood vessels.
+- Produce a vessel mask/map.
+- Provide structural visualization.
+- Support downstream evidence analysis.
+
+Display:
+Original fundus + vessel mask/overlay.
+
+A vessel mask is not Grad-CAM.
+
+======================================================================
+8. FOVEA LOCALIZATION
+======================================================================
+
+Current fovea localization: READY / BEING INTEGRATED.
+
+Purpose:
+- Estimate foveal location.
+- Display a marker on the fundus.
+- Provide anatomical context for lesion analysis.
+
+Display:
+Fundus image + fovea marker.
+
+======================================================================
+9. OPTIC DISC
+======================================================================
+
+SIH requires optic disc localization.
+
+Final platform should provide:
+- Optic disc location.
+- Coordinates/center where appropriate.
+- Overlay visualization.
+
+If no working optic-disc model currently exists, add it before claiming
+complete retinal-structure coverage.
+
+======================================================================
+10. GRAD-CAM
+======================================================================
+
+Grad-CAM answers:
+"Which regions contributed most strongly to the classifier's prediction?"
+
+Process:
+Fundus -> DR classifier -> selected class ->
+late convolutional feature maps -> class gradients ->
+weighted activation map -> resize -> heatmap -> overlay.
+
+Show:
+1. Original fundus.
+2. Grad-CAM heatmap.
+3. Original + Grad-CAM overlay.
+
+IMPORTANT:
+Grad-CAM does not inherently identify a lesion type and does not give
+precise lesion boundaries.
+
+Grad-CAM = where the classifier's decision was influenced.
+Segmentation mask = which pixels belong to a structure/lesion.
+Lesion mask = pixel/region evidence for a particular lesion.
+
+======================================================================
+11. FUTURE LESION ANALYSIS
+======================================================================
+
+Planned modules:
+- Microaneurysm detection/segmentation.
+- Exudate segmentation.
+- Hemorrhage detection/classification.
+- Neovascularization detection.
+
+Each module should eventually return, where supported:
+- Lesion type.
+- Count.
+- Location.
+- Confidence.
+- Mask.
+- Overlay.
+- Evidence information.
+
+Architecture must make lesion analysis a plug-in module so it can be
+added without rebuilding the platform.
+
+======================================================================
+12. EVIDENCE AGGREGATION
+======================================================================
+
+Final explainability combines:
+
+DR grade
++
+Grad-CAM
++
+Vessel extraction
++
+Fovea localization
++
+Optic disc localization
++
+Future lesion masks
+=
+Clinical evidence view.
+
+The system must clearly label every visualization.
+
+======================================================================
+13. CALIBRATED CONFIDENCE
+======================================================================
+
+Raw softmax probability is not automatically calibrated confidence.
+
+Planned:
+Raw model probability -> calibration method (e.g. temperature scaling)
+-> calibrated confidence -> UI/report.
+
+Validate with:
+- Expected Calibration Error (ECE).
+- Reliability diagram.
+- Brier score.
+
+======================================================================
+14. HUMAN-IN-THE-LOOP
+======================================================================
+
+Referable or uncertain cases enter a review queue.
+
+Reviewer sees:
+- Original image.
+- Enhanced image.
+- DR grade.
+- Confidence.
+- Grad-CAM.
+- Vessel map.
+- Fovea.
+- Optic disc when available.
+- Lesion masks when available.
+
+Reviewer actions:
+- Confirm AI result.
+- Modify/override grade.
+- Mark referral decision.
+- Add comments.
+- Finalize case.
+
+The under-30-second requirement must be demonstrated by actual usability
+testing, not assumed.
+
+======================================================================
+15. AUTOMATED REPORT
+======================================================================
+
+Report should contain:
+
+CASE INFORMATION
+- Case ID.
+- Date/time.
+- Relevant screening information.
+
+IMAGE QUALITY
+- Focus.
+- Brightness/illumination.
+- Contrast.
+- FOV.
+- Quality status.
+- Enhancement applied/not applied.
+
+AI RESULT
+- DR grade.
+- Grade description.
+- Class probabilities.
+- Calibrated confidence.
+- Referable status.
+
+EXPLAINABILITY
+- Original image.
+- Grad-CAM overlay.
+
+RETINAL STRUCTURES
+- Vessel map.
+- Fovea.
+- Optic disc when available.
+
+LESION EVIDENCE
+- Microaneurysms.
+- Exudates.
+- Hemorrhages.
+- Neovascularization.
+(When modules are available.)
+
+RECOMMENDATION
+- Review/referral recommendation.
+
+HUMAN REVIEW
+- Ophthalmologist decision.
+- Comments.
+- Final grade.
+- Review timestamp.
+
+======================================================================
+16. FRONTEND
+======================================================================
+
+The frontend should be a clinical screening application.
+
+MAIN PAGES:
+1. Dashboard.
+2. New Screening.
+3. Screening Result.
+4. Review Queue.
+5. Patient/Case History.
+6. Reports.
+7. Analytics.
+8. Settings.
+
+DASHBOARD:
+- Total screenings.
+- Today's screenings.
+- Referable cases.
+- Non-referable cases.
+- Ungradable images.
+- Pending reviews.
+- Average processing time.
+- Review workload.
+
+NEW SCREENING:
+- Patient/case information.
+- Image upload.
+- Preview.
+- Start screening.
+- Processing status.
+
+RESULT:
+- Original fundus.
+- Enhanced image when used.
+- DR grade.
+- Referable status.
+- Confidence.
+- Grad-CAM.
+- Vessel map.
+- Fovea.
+- Optic disc when available.
+- Lesion evidence when available.
+- Recommendation.
+- Generate report.
+- Send for review.
+
+REVIEW QUEUE:
+- Pending cases.
+- Priority/referable status.
+- AI grade.
+- Confidence.
+- Review actions.
+
+HISTORY:
+- Previous cases.
+- Results.
+- Reports.
+- Review decisions.
+
+======================================================================
+17. BACKEND
+======================================================================
+
+The backend is the screening orchestrator.
+
+Logical structure:
+
+backend/
+  app/
+    api/
+      screening
+      patients/cases
+      reports
+      review
+      analytics
+
+    services/
+      quality_service
+      enhancement_service
+      dr_service
+      vessel_service
+      fovea_service
+      optic_disc_service
+      gradcam_service
+      lesion_service
+      calibration_service
+      report_service
+
+    models/
+      dr_model
+      vessel_model
+      fovea_model
+      optic_disc_model
+      lesion_models
+
+    database/
+    storage/
+    utils/
+
+Storage:
+- Original images.
+- Enhanced images.
+- Grad-CAM heatmaps.
+- Vessel masks.
+- Fovea/optic-disc annotations.
+- Lesion masks.
+- Reports.
+
+======================================================================
+18. MODEL ORCHESTRATION
+======================================================================
+
+STEP 1: Receive image.
+STEP 2: Validate image.
+STEP 3: Quality assessment.
+STEP 4: If ungradable, stop and request recapture.
+STEP 5: If borderline, enhance and reassess.
+STEP 6: Run DR classifier.
+STEP 7: Generate Grad-CAM.
+STEP 8: Run vessel extraction.
+STEP 9: Run fovea localization.
+STEP 10: Run optic disc localization when available.
+STEP 11: Run lesion analysis when integrated.
+STEP 12: Calibrate confidence.
+STEP 13: Determine referable status.
+STEP 14: Generate recommendation.
+STEP 15: Route referable/uncertain cases to review.
+STEP 16: Generate report.
+STEP 17: Store case and outputs.
+
+======================================================================
+19. API CONCEPT
+======================================================================
+
+POST /screenings
+Create case and upload image.
+
+POST /screenings/{case_id}/analyze
+Run the screening pipeline.
+
+GET /screenings/{case_id}
+Return screening result.
+
+GET /screenings/{case_id}/visualizations
+Return Grad-CAM, vessel, fovea, optic-disc and future lesion outputs.
+
+POST /screenings/{case_id}/review
+Store ophthalmologist decision.
+
+GET /reports/{case_id}
+Retrieve generated report.
+
+Exact endpoint names can be finalized during implementation.
+
+======================================================================
+20. DATABASE / CASE STRUCTURE
+======================================================================
+
+CASE
+- Case ID.
+- Patient/case information.
+- Original image.
+- Quality results.
+- Enhancement result.
+- DR grade.
+- Class probabilities.
+- Referable status.
+- Calibrated confidence.
+- Grad-CAM.
+- Vessel mask.
+- Fovea coordinates.
+- Optic disc coordinates.
+- Lesion results.
+- Recommendation.
+- Ophthalmologist review.
+- Final report.
+- Timestamps/audit information.
+
+======================================================================
+21. ERROR HANDLING
+======================================================================
+
+Handle:
+- Invalid image format.
+- Corrupt image.
+- Too-small image.
+- Missing retinal field.
+- Very dark image.
+- Overexposure.
+- Poor focus.
+- Model inference failure.
+- Visualization failure.
+- Report failure.
+- Backend timeout.
+- Review queue failure.
+
+Return understandable user messages, not raw Python tracebacks.
+
+======================================================================
+22. VALIDATION AND PERFORMANCE
+======================================================================
+
+Classification metrics:
+- Accuracy.
+- Balanced accuracy.
+- Macro F1.
+- Weighted F1.
+- Precision.
+- Recall.
+- QWK.
+- Confusion matrix.
+
+Referable metrics:
+- Sensitivity.
+- Specificity.
+- ROC/AUC where appropriate.
+- Confusion matrix.
+- Threshold.
+
+Target:
+Referable sensitivity >90%.
+Referable specificity >85%.
+
+Training metrics alone are not sufficient. Final claims should use
+appropriate held-out evaluation data.
+
+======================================================================
+23. BENCHMARK VALIDATION
+======================================================================
+
+Document:
+- Dataset.
+- Number of images.
+- Train/validation/test split.
+- Evaluation protocol.
+- Metrics.
+- Baselines.
+- Model architecture.
+- Results.
+- Limitations.
+
+Do not claim superiority unless the comparison is actually performed
+under a comparable protocol.
+
+======================================================================
+24. SIMULINK TELEMEDICINE SIMULATION
+======================================================================
+
+Separate system-level component:
+
+Patient arrivals
+      |
+      v
+Image acquisition
+      |
+      v
+Network / bandwidth
+      |
+      v
+Quality assessment
+      |
+      v
+AI processing
+      |
+      v
+Referable cases
+      |
+      v
+Ophthalmologist queue
+      |
+      v
+Human review
+      |
+      v
+Final outcome
+
+Simulation parameters can include:
+- Patients/year.
+- Patients/day/hour.
+- Arrival distribution.
+- Image size.
+- Upload rate.
+- Bandwidth.
+- Network latency.
+- AI inference time.
+- GPU count.
+- Processing throughput.
+- Percentage ungradable.
+- Percentage referable.
+- Ophthalmologist count.
+- Review time/case.
+- Queue length.
+- Waiting time.
+- GPU utilization.
+- Doctor utilization.
+- Network utilization.
+
+======================================================================
+25. 100,000+ PATIENT/YEAR CAPACITY
+======================================================================
+
+The requirement means demonstrating system capacity through simulation;
+it does not require 100,000 real patient images.
+
+Illustrative workload:
+100,000 patients/year is approximately 274 patients/day.
+At 10 operating hours/day, this is approximately 27 patients/hour.
+
+These are example simulation assumptions, not measured deployment
+values.
+
+The simulation should test different resource configurations and find
+the bottleneck and required resources.
+
+Example:
+1 GPU + 1 ophthalmologist
+2 GPUs + 2 ophthalmologists
+5 GPUs + 5 ophthalmologists
+10 GPUs + 10 ophthalmologists
+
+Compare:
+- Throughput.
+- Queue length.
+- Waiting time.
+- GPU utilization.
+- Doctor utilization.
+- Bandwidth utilization.
+- Annual capacity.
+
+======================================================================
+26. SECURITY / DATA MANAGEMENT
+======================================================================
+
+Recommended platform features:
+- Authentication.
+- Role-based access.
+- Secure API.
+- Controlled report access.
+- Minimal patient information in model logs.
+- Audit trail.
+- Secure image storage.
+- Data retention/deletion policy.
+
+Prototype security limitations should be documented honestly.
+
+======================================================================
+27. COMPLETE USER JOURNEY
+======================================================================
+
+1. Login.
+2. Open Dashboard.
+3. Select New Screening.
+4. Enter case information.
+5. Upload fundus image.
+6. Preview image.
+7. Start screening.
+8. Quality assessment.
+9. If poor, show reason and request recapture.
+10. If borderline, enhance and reassess.
+11. If acceptable, continue.
+12. Generate DR grade.
+13. Generate Grad-CAM.
+14. Generate vessel map.
+15. Generate fovea location.
+16. Generate optic disc when available.
+17. Generate lesion evidence when available.
+18. Generate calibrated confidence.
+19. Determine referable status.
+20. Display result.
+21. Route referable/uncertain case to review.
+22. Ophthalmologist confirms/modifies.
+23. Generate final report.
+24. Save case to history.
+
+======================================================================
+28. CURRENT PROJECT STATUS
+======================================================================
+
+READY:
+[YES] DR Grade Model.
+[YES] Vessel Extraction Model.
+[YES] Fovea Localization.
+[YES] Image Quality Assessment.
+[YES] Image Enhancement.
+[YES] Grad-CAM.
+
+TO INTEGRATE / COMPLETE:
+[ ] Complete frontend.
+[ ] Complete backend.
+[ ] Database/case management.
+[ ] Review queue.
+[ ] Automated report.
+[ ] Calibrated confidence.
+[ ] Optic disc localization if absent.
+[ ] Lesion analysis.
+[ ] Ophthalmologist workflow.
+[ ] Under-30-second usability validation.
+[ ] Formal SIH target validation.
+[ ] Published benchmark comparison.
+[ ] MATLAB/Simulink simulation.
+[ ] 100,000+ patient/year capacity experiment.
+
+======================================================================
+29. IMPORTANT CLAIMS TO AVOID UNTIL VERIFIED
+======================================================================
+
+Do not claim >90% sensitivity or >85% specificity without appropriate
+held-out evaluation.
+
+Do not call Grad-CAM a lesion mask.
+
+Do not claim lesion detection before lesion models are integrated.
+
+Do not call raw softmax probability calibrated confidence.
+
+Do not claim <30-second ophthalmologist validation without measuring it.
+
+Do not claim 100,000+ patient/year operational capacity without the
+Simulink/resource simulation.
+
+Do not claim complete retinal structure analysis if optic disc
+localization is not implemented.
+
+======================================================================
+30. FINAL SYSTEM ARCHITECTURE
+======================================================================
+
+                         FRONTEND
+                            |
+                         REST API
+                            |
+                         BACKEND
+                            |
+       +--------------------+--------------------+
+       |                    |                    |
+       v                    v                    v
+ QUALITY ENGINE        AI ENGINE           REPORT ENGINE
+       |                    |
+       |              +-----+-----+------------------+
+       |              |     |     |                  |
+       v              v     v     v                  v
+ Focus/Light/FOV     DR   Vessel Fovea          Lesion Engine
+ Enhancement        CAM   Model  Model             FUTURE
+       |                              |
+       +------------------------------+
+                      |
+               Evidence Engine
+                      |
+             Confidence Calibration
+                      |
+               Referable Decision
+                      |
+             +--------+--------+
+             |                 |
+             v                 v
+          Routine        Ophthalmologist
+                            Review
+                               |
+                               v
+                         Final Result
+                               |
+                               v
+                            Report
+                               |
+                               v
+                           Database
+
+SEPARATE:
+MATLAB / SIMULINK
+Patient load -> Network -> AI -> Review queue ->
+resource allocation -> 100,000+ patients/year
+
+======================================================================
+31. FINAL PROJECT POSITIONING
+======================================================================
+
+The project should be presented as:
+
+"An AI-assisted diabetic retinopathy screening and telemedicine
+decision-support platform"
+
+It is not merely a DR classification model.
+
+The integrated system combines:
+- Image quality intelligence.
+- Adaptive enhancement.
+- DR grading.
+- Referable DR screening.
+- Vessel analysis.
+- Fovea localization.
+- Optic disc localization.
+- Grad-CAM explainability.
+- Future lesion-level evidence.
+- Confidence calibration.
+- Human-in-the-loop ophthalmologist validation.
+- Automated clinical reporting.
+- Case/history management.
+- Telemedicine workflow simulation.
+- District-level resource planning for 100,000+ patients/year.
+
+The architecture must remain modular so future lesion models and other
+clinical AI modules can be added without redesigning the entire system.
+
+======================================================================
+END OF SIH 26038 PROJECT MASTER SPECIFICATION
+======================================================================

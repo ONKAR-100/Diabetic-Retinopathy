@@ -1,11 +1,17 @@
 import { apiClient } from './api';
+import { cache, TTL } from './cache';
+
 export async function createScreening(patientId: string, previousScreeningId?: string | null) {
   const { data } = await apiClient.post('/screenings', { 
     patient_id: patientId,
     previous_screening_id: previousScreeningId || null
   });
+  // A new screening was created — invalidate the list cache
+  cache.invalidatePrefix('screenings:list');
+  cache.invalidate('analytics:summary');
   return data;
 }
+
 export async function uploadImage(screeningId: string, eye: 'left' | 'right', file: File) {
   const form = new FormData();
   form.append('eye', eye);
@@ -13,21 +19,42 @@ export async function uploadImage(screeningId: string, eye: 'left' | 'right', fi
   const { data } = await apiClient.post(`/screenings/${screeningId}/upload`, form);
   return data;
 }
+
 export async function assessQuality(screeningId: string, eye: 'left' | 'right' | 'both') {
   const { data } = await apiClient.post(`/screenings/${screeningId}/assess-quality`, { eye });
   return data;
 }
+
 export async function analyzeScreening(screeningId: string, eye: 'left' | 'right' | 'both') {
   const { data } = await apiClient.post(`/screenings/${screeningId}/analyze`, { eye });
+  // Analysis complete — invalidate list and analytics caches
+  cache.invalidatePrefix('screenings:list');
+  cache.invalidate(`screenings:detail:${screeningId}`);
+  cache.invalidate('analytics:summary');
   return data;
 }
+
 export async function getScreening(screeningId: string) {
-  const { data } = await apiClient.get(`/screenings/${screeningId}`);
-  return data;
+  return cache.get(
+    `screenings:detail:${screeningId}`,
+    async () => {
+      const { data } = await apiClient.get(`/screenings/${screeningId}`);
+      return data;
+    },
+    TTL.SCREENING_DETAIL
+  );
 }
+
 export async function listScreenings(params?: { page?: number; limit?: number; grade?: number; referable?: boolean; status?: string; patient_id?: string }) {
-  const { data } = await apiClient.get('/screenings', { params });
-  return data;
+  const key = `screenings:list:${JSON.stringify(params || {})}`;
+  return cache.get(
+    key,
+    async () => {
+      const { data } = await apiClient.get('/screenings', { params });
+      return data;
+    },
+    TTL.SCREENINGS
+  );
 }
 
 // ── Longitudinal comparison API calls ──────────────────────────────────────────

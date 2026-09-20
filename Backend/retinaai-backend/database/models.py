@@ -1,6 +1,6 @@
 import uuid
 from datetime import datetime, timezone
-from sqlalchemy import Column, String, Integer, Float, Boolean, DateTime, ForeignKey, Date, JSON, Text
+from sqlalchemy import Column, String, Integer, Float, Boolean, DateTime, ForeignKey, Date, JSON, Text, Index
 from sqlalchemy.orm import relationship
 from database.db import Base
 
@@ -26,7 +26,7 @@ class Patient(Base):
     previous_dr = Column(String)
     previous_screening = Column(Date, nullable=True)
     hba1c = Column(String, nullable=True)
-    created_at = Column(DateTime, default=utc_now)
+    created_at = Column(DateTime, default=utc_now, index=True)
     updated_at = Column(DateTime, default=utc_now, onupdate=utc_now)
 
     screenings = relationship("Screening", back_populates="patient")
@@ -47,6 +47,14 @@ class User(Base):
 
 class Screening(Base):
     __tablename__ = "screenings"
+    __table_args__ = (
+        # Fast lookups for the most common query patterns
+        Index("ix_screenings_patient_created", "patient_id", "created_at"),
+        Index("ix_screenings_created_at", "created_at"),
+        Index("ix_screenings_review_status", "review_status"),
+        Index("ix_screenings_overall_referable", "overall_referable"),
+        Index("ix_screenings_status", "status"),
+    )
 
     id = Column(String, primary_key=True, default=generate_uuid)
     screening_display_id = Column(String, unique=True, index=True)

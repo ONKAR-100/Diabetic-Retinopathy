@@ -9,6 +9,7 @@ import {
 import { Badge, Button } from '../components';
 import { listScreenings } from '../services/screenings';
 import { useScreening } from '../contexts/ScreeningContext';
+import { SkeletonTable } from '../components/SkeletonLoaders';
 
 export interface HistoryRecord {
   screeningId: string;
@@ -176,7 +177,7 @@ export default function HistoryPage() {
     async function load() {
       setLoading(true);
       try {
-        const live = await listScreenings({ limit: 100 });
+        const live = await listScreenings({ limit: 20 });
         const rawList: any[] = live?.screenings || live?.items || (Array.isArray(live) ? live : []);
         if (rawList && rawList.length > 0) {
           const formatted: HistoryRecord[] = rawList.map((it: any) => {
@@ -598,11 +599,8 @@ export default function HistoryPage() {
             <tbody>
               {loading && (
                 <tr>
-                  <td colSpan={9} style={{ textAlign: 'center', padding: '40px 16px', color: '#7a9496' }}>
-                    <div style={{ display: 'inline-flex', alignItems: 'center', gap: 10 }}>
-                      <Activity size={18} color="#0e6264" />
-                      <span>Loading clinical screening records...</span>
-                    </div>
+                  <td colSpan={9} style={{ padding: 0, border: 'none' }}>
+                    <SkeletonTable rows={8} cols={7} />
                   </td>
                 </tr>
               )}

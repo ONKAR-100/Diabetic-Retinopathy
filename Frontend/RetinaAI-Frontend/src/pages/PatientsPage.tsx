@@ -27,6 +27,7 @@ import {
   Archive
 } from 'lucide-react';
 import { listPatients, deletePatient } from '../services/patients';
+import { SkeletonTable, SkeletonCards } from '../components/SkeletonLoaders';
 
 interface PatientRecord {
   id: string;
@@ -811,20 +812,8 @@ export default function PatientsPage() {
 
         {/* Content: Skeleton / Empty / Table / Grid */}
         {loading ? (
-          <div style={{ padding: 24 }}>
-            {[1, 2, 3, 4, 5].map(i => (
-              <div key={i} className="rq-skeleton-row" style={{ height: 74 }}>
-                <div className="rq-skeleton-circle" style={{ width: 18, height: 18, borderRadius: 4 }} />
-                <div className="rq-skeleton-circle" style={{ width: 38, height: 38, marginLeft: 12 }} />
-                <div style={{ flex: 1, marginLeft: 14 }}>
-                  <div className="rq-skeleton-line" style={{ width: '35%', height: 14, marginBottom: 6 }} />
-                  <div className="rq-skeleton-line" style={{ width: '20%', height: 10 }} />
-                </div>
-                <div className="rq-skeleton-pill" style={{ width: 80, height: 24, marginRight: 20 }} />
-                <div className="rq-skeleton-pill" style={{ width: 90, height: 24, marginRight: 20 }} />
-                <div className="rq-skeleton-circle" style={{ width: 32, height: 32 }} />
-              </div>
-            ))}
+          <div style={{ padding: '16px 0' }}>
+            {viewMode === 'table' ? <SkeletonTable rows={8} cols={7} /> : <SkeletonCards count={6} />}
           </div>
         ) : filteredPatients.length === 0 ? (
           <div className="rq-empty-state" style={{ padding: '48px 20px' }}>

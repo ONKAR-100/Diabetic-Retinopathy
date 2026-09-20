@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, Query
-from sqlalchemy.orm import Session, joinedload
+from sqlalchemy.orm import Session, joinedload, contains_eager
+from sqlalchemy import text
 from typing import List, Optional
 from datetime import datetime
 import os
@@ -7,6 +8,8 @@ import io
 import logging
 import cv2
 import numpy as np
+import time
+import threading
 from PIL import Image as PILImage
 import aiofiles
 
@@ -19,6 +22,16 @@ from config import settings
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
+
+# ── 10-second in-process list cache (keyed by page+limit+patient_id) ─────────
+_list_cache: dict = {}
+_list_lock = threading.Lock()
+_LIST_TTL = 10.0
+
+
+def _invalidate_list_cache():
+    with _list_lock:
+        _list_cache.clear()
 
 
 def serialize_review(review: Optional[Review]) -> Optional[dict]:
@@ -61,15 +74,25 @@ def get_latest_review(scr: Screening) -> Optional[Review]:
 
 from services.storage_service import storage_service
 
-def map_screening_to_response(scr: Screening):
+def map_screening_to_response(scr: Screening, resolve_urls: bool = True):
+    """
+    Build screening response dict.
+    resolve_urls=False is used for the list endpoint to skip Supabase URL
+    resolution (the list view never displays images — only the detail page does).
+    """
     def build_eye(eye_prefix):
         status = getattr(scr, f"{eye_prefix}_quality_status")
         if not status: return None
 
         lesion_data = getattr(scr, f"{eye_prefix}_lesion_result")
-        if lesion_data and isinstance(lesion_data, dict) and lesion_data.get("overlay_url"):
+        if resolve_urls and lesion_data and isinstance(lesion_data, dict) and lesion_data.get("overlay_url"):
             lesion_data = dict(lesion_data)
             lesion_data["overlay_url"] = storage_service.resolve_asset_url(lesion_data["overlay_url"])
+
+        def _url(path):
+            if not resolve_urls:
+                return path  # raw path; detail endpoint will resolve
+            return storage_service.resolve_asset_url(path)
 
         return {
             "quality": {
@@ -77,18 +100,18 @@ def map_screening_to_response(scr: Screening):
                 "scores": getattr(scr, f"{eye_prefix}_quality_scores") or {},
                 "reason": getattr(scr, f"{eye_prefix}_quality_reason")
             },
-            "original_image_url": storage_service.resolve_asset_url(getattr(scr, f"{eye_prefix}_image_path")),
+            "original_image_url": _url(getattr(scr, f"{eye_prefix}_image_path")),
             "dr_grade": getattr(scr, f"{eye_prefix}_dr_grade"),
             "dr_grade_name": f"Grade {getattr(scr, f'{eye_prefix}_dr_grade')}" if getattr(scr, f"{eye_prefix}_dr_grade") is not None else None,
             "class_probabilities": getattr(scr, f"{eye_prefix}_class_probabilities"),
             "confidence_raw": getattr(scr, f"{eye_prefix}_confidence_raw"),
             "confidence_calibrated": getattr(scr, f"{eye_prefix}_confidence_calibrated"),
             "referable": getattr(scr, f"{eye_prefix}_referable"),
-            "gradcam_url": storage_service.resolve_asset_url(getattr(scr, f"{eye_prefix}_gradcam_path")),
-            "vessel_overlay_url": storage_service.resolve_asset_url(getattr(scr, f"{eye_prefix}_vessel_overlay_path")),
-            "vessel_mask_url": storage_service.resolve_asset_url(getattr(scr, f"{eye_prefix}_vessel_mask_path")),
+            "gradcam_url": _url(getattr(scr, f"{eye_prefix}_gradcam_path")),
+            "vessel_overlay_url": _url(getattr(scr, f"{eye_prefix}_vessel_overlay_path")),
+            "vessel_mask_url": _url(getattr(scr, f"{eye_prefix}_vessel_mask_path")),
             "vessel_density": getattr(scr, f"{eye_prefix}_vessel_density"),
-            "od_fovea_overlay_url": storage_service.resolve_asset_url(getattr(scr, f"{eye_prefix}_od_fovea_overlay_path")),
+            "od_fovea_overlay_url": _url(getattr(scr, f"{eye_prefix}_od_fovea_overlay_path")),
             "od_x": getattr(scr, f"{eye_prefix}_od_x"),
             "od_y": getattr(scr, f"{eye_prefix}_od_y"),
             "od_confidence": getattr(scr, f"{eye_prefix}_od_confidence"),
@@ -124,30 +147,52 @@ def map_screening_to_response(scr: Screening):
 @router.get("/", response_model=dict)
 def list_screenings(
     page: int = Query(1, ge=1, description="Page number (1-indexed)"),
-    limit: int = Query(50, ge=1, le=100, description="Page size (max 100)"),
+    limit: int = Query(20, ge=1, le=100, description="Page size (max 100)"),
     patient_id: Optional[str] = None,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    query = db.query(Screening).options(
-        joinedload(Screening.reviews).joinedload(Review.reviewer)
+    cache_key = f"{page}:{limit}:{patient_id or ''}"
+    now = time.monotonic()
+
+    with _list_lock:
+        entry = _list_cache.get(cache_key)
+        if entry and (now - entry["ts"]) < _LIST_TTL:
+            return entry["data"]
+
+    # Eager-load patient + only the latest review per screening
+    # (one JOIN, not N individual queries)
+    query = (
+        db.query(Screening)
+        .options(
+            joinedload(Screening.patient),
+            joinedload(Screening.reviews),   # load all reviews, pick latest in Python
+        )
     )
     if patient_id:
-        patient = db.query(Patient).filter((Patient.id == patient_id) | (Patient.patient_display_id == patient_id)).first()
+        patient = db.query(Patient).filter(
+            (Patient.id == patient_id) | (Patient.patient_display_id == patient_id)
+        ).first()
         pid = patient.id if patient else patient_id
         query = query.filter(Screening.patient_id == pid)
-    
+
     total = query.count()
     screenings = query.order_by(Screening.created_at.desc()).offset((page - 1) * limit).limit(limit).all()
-    mapped = [map_screening_to_response(s) for s in screenings]
-    
-    return {
+    # resolve_urls=False — list view never renders images, skip Supabase calls
+    mapped = [map_screening_to_response(s, resolve_urls=False) for s in screenings]
+
+    result = {
         "screenings": mapped,
         "items": mapped,
         "total": total,
         "page": page,
         "limit": limit
     }
+
+    with _list_lock:
+        _list_cache[cache_key] = {"data": result, "ts": time.monotonic()}
+
+    return result
 
 
 @router.post("", response_model=dict)
@@ -203,7 +248,7 @@ def create_screening(req: ScreeningCreate, db: Session = Depends(get_db), user: 
     db.add(scr)
     db.commit()
     db.refresh(scr)
-    
+    _invalidate_list_cache()  # bust stale list cache
     return map_screening_to_response(scr)
 
 @router.post("/{id}/upload")
