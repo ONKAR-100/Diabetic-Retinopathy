@@ -316,10 +316,10 @@ class StorageService:
         # 1. Supabase URLs
         if clean.startswith("http://") or clean.startswith("https://"):
             for bucket in [settings.STORAGE_BUCKET_UPLOADS, settings.STORAGE_BUCKET_RESULTS, settings.STORAGE_BUCKET_REPORTS]:
-                marker_public = f"/storage/v1/object/public/{bucket}/"
+                marker_pub = f"/storage/v1/object/public/{bucket}/"
                 marker_sign = f"/storage/v1/object/sign/{bucket}/"
-                if marker_public in clean:
-                    obj_path = clean.split(marker_public, 1)[1].split("?")[0]
+                if marker_pub in clean:
+                    obj_path = clean.split(marker_pub, 1)[1].split("?")[0]
                     return self.get_signed_url(bucket, obj_path, expires_in)
                 if marker_sign in clean:
                     obj_path = clean.split(marker_sign, 1)[1].split("?")[0]

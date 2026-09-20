@@ -363,6 +363,29 @@ def test_media_endpoint_authenticated_success(test_setup):
             os.remove(test_file)
 
 
+def test_media_endpoint_authenticated_with_query_param_success(test_setup):
+    """Verify GET /api/media/...?token=... with token in query param returns 200 and image bytes."""
+    client = test_setup["client"]
+    doc_token = test_setup["doc_token"]
+
+    test_file = os.path.join(settings.STATIC_DIR, "uploads", "phase47_query_valid.jpg")
+    os.makedirs(os.path.dirname(test_file), exist_ok=True)
+    with open(test_file, "wb") as f:
+        f.write(b"\xff\xd8\xff\xe0\x00\x10JFIF\x00query_token_jpeg_bytes")
+
+    try:
+        resp = client.get(
+            f"/api/media/uploads/phase47_query_valid.jpg?token={doc_token}"
+        )
+        assert resp.status_code == 200
+        assert resp.content == b"\xff\xd8\xff\xe0\x00\x10JFIF\x00query_token_jpeg_bytes"
+        assert resp.headers["content-type"].startswith("image/")
+    finally:
+        if os.path.exists(test_file):
+            os.remove(test_file)
+
+
+
 def test_media_endpoint_authenticated_not_found(test_setup):
     """Verify GET /api/media/... for non-existent file returns 404."""
     client = test_setup["client"]

@@ -30,7 +30,7 @@ from fastapi import Depends, HTTPException
 from fastapi.responses import FileResponse
 from config import settings
 from database.models import User
-from core.dependencies import get_current_user
+from core.dependencies import get_current_user, get_current_user_flexible
 
 # Ensure local storage directory exists
 os.makedirs(settings.STATIC_DIR, exist_ok=True)
@@ -38,7 +38,7 @@ os.makedirs(settings.STATIC_DIR, exist_ok=True)
 @app.get("/api/media/{file_path:path}", tags=["Media"])
 def get_media_file(
     file_path: str,
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user_flexible)
 ):
     """
     Authenticated media gateway for local clinical images and artifacts.
