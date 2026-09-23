@@ -13,7 +13,7 @@ The platform integrates real-time fundus **Image Quality Assessment (IQA)**, ada
 
 ## 🎥 Demo Video
 
-[▶️ Watch the RetinaAI Demo](https://www.youtube.com/watch?v=vl7U-veuk-A)
+[▶️ Watch the RetinaAI Demo](https://youtu.be/XXc_SpSUD1A?si=7Nl-OHPi_RtnuJd4)
 
 ## 📋 Table of Contents
 
